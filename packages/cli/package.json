@@ -1,5 +1,5 @@
 {
-  "name": "skilo",
+  "name": "skilo-cli",
   "version": "1.0.0",
   "description": "Instant skill handoff - share agent skills with a link",
   "type": "module",
