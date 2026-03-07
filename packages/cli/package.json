@@ -1,18 +1,22 @@
 {
-  "name": "@skilo/cli",
+  "name": "skilo",
   "version": "1.0.0",
+  "description": "Instant skill handoff - share agent skills with a link",
   "type": "module",
+  "main": "dist/index.js",
   "bin": {
     "skilo": "./bin/skilo"
   },
+  "files": [
+    "dist/",
+    "bin/"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "lint": "eslint src",
-    "test": "vitest"
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@skilo/shared": "workspace:*",
     "commander": "^12.1.0",
     "fetch-retry": "^5.0.6",
     "tar": "^7.4.3"
@@ -20,11 +24,18 @@
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/tar": "^6.1.13",
-    "eslint": "^9.18.0",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "typescript": "^5.7.2"
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "keywords": ["ai", "agents", "skills", "cli", "sharing"],
+  "author": "yazcaleb",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yazcaleb/skilo.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://skilo.xyz"
 }
