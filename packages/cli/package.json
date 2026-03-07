@@ -1,0 +1,30 @@
+{
+  "name": "@skilo/cli",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "skilo": "./bin/skilo"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@skilo/shared": "workspace:*",
+    "commander": "^12.1.0",
+    "fetch-retry": "^5.0.6",
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/tar": "^6.1.13",
+    "eslint": "^9.18.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

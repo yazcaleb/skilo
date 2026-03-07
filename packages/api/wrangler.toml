@@ -1,0 +1,25 @@
+name = "skilo-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-31"
+node_compat = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "skilo"
+database_id = "<your-database-id>"
+
+[[r2_buckets]]
+binding = "SKILLPACK_BUCKET"
+bucket_name = "skilo-bundles"
+
+[[kv_namespaces]]
+binding = "SKILLPACK_KV"
+id = "<your-kv-namespace-id>"
+
+[env.production]
+d1_databases = [
+  { binding = "DB", database_name = "skilo-prod", database_id = "<your-prod-database-id>" }
+]
+
+[build]
+command = ""

@@ -1,0 +1,26 @@
+{
+  "name": "@skilo/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./types.ts",
+    "./manifest": "./skill-manifest.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
