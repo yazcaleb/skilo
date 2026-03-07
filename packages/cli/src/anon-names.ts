@@ -239,7 +239,7 @@ function randomElement<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// Generate very short name: 2 letters + noun (e.g., an.cat, xy.fish)
+// Generate very short name: 2 letters + noun (e.g., ancat, xydog)
 export function generateAnonName(): string {
   const prefix = randomElement(PREFIXES);
   const noun = randomElement(ANIMALS);
