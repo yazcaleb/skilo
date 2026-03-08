@@ -1,5 +1,8 @@
+import { access, constants } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
+import { isInteractiveOutput, isJsonOutput, printNote, printPrimary, printSection } from './output.js';
 
 export interface InstallOptions {
   global?: boolean;
@@ -36,23 +39,110 @@ export interface InstallDestination {
   dirs: string[];
 }
 
-const INSTALL_TARGETS: Array<{ key: InstallTarget; label: string }> = [
-  { key: 'claude', label: 'Claude Code' },
-  { key: 'codex', label: 'Codex' },
-  { key: 'cursor', label: 'Cursor' },
-  { key: 'amp', label: 'Amp' },
-  { key: 'windsurf', label: 'Windsurf' },
-  { key: 'opencode', label: 'OpenCode' },
-  { key: 'cline', label: 'Cline' },
-  { key: 'roo', label: 'Roo' },
-  { key: 'openclaw', label: 'OpenClaw' },
+export interface InstallTargetResolution {
+  mode: 'explicit' | 'env' | 'detected' | 'selected' | 'default' | 'needs_target';
+  targets: InstallTarget[];
+  detectedTargets: InstallTarget[];
+}
+
+type InstallTargetDefinition = {
+  key: InstallTarget;
+  label: string;
+  aliases: string[];
+  getDirs: (useNativeDirs: boolean) => string[];
+};
+
+const INSTALL_TARGETS: InstallTargetDefinition[] = [
+  {
+    key: 'claude',
+    label: 'Claude Code',
+    aliases: ['cc', 'claude', 'claude-code'],
+    getDirs: (useNativeDirs) => {
+      const baseDir = useNativeDirs ? homedir() : process.cwd();
+      return [join(baseDir, '.claude', 'skills')];
+    },
+  },
+  {
+    key: 'codex',
+    label: 'Codex',
+    aliases: ['codex'],
+    getDirs: (useNativeDirs) => {
+      const baseDir = useNativeDirs ? homedir() : process.cwd();
+      return [join(baseDir, '.agents', 'skills'), join(baseDir, '.codex', 'skills')];
+    },
+  },
+  {
+    key: 'cursor',
+    label: 'Cursor',
+    aliases: ['cursor'],
+    getDirs: (useNativeDirs) => {
+      const baseDir = useNativeDirs ? homedir() : process.cwd();
+      return [join(baseDir, '.cursor', 'skills')];
+    },
+  },
+  {
+    key: 'amp',
+    label: 'Amp',
+    aliases: ['amp'],
+    getDirs: (useNativeDirs) => {
+      const xdgConfigHome = useNativeDirs ? getXdgConfigHome() : join(process.cwd(), '.config');
+      return [join(xdgConfigHome, 'agents', 'skills')];
+    },
+  },
+  {
+    key: 'windsurf',
+    label: 'Windsurf',
+    aliases: ['windsurf'],
+    getDirs: (useNativeDirs) => {
+      const baseDir = useNativeDirs ? homedir() : process.cwd();
+      return [join(baseDir, '.codeium', 'windsurf', 'skills')];
+    },
+  },
+  {
+    key: 'opencode',
+    label: 'OpenCode',
+    aliases: ['oc', 'opencode'],
+    getDirs: (useNativeDirs) => {
+      if (useNativeDirs) {
+        return [join(getXdgConfigHome(), 'opencode', 'skills')];
+      }
+      return [join(process.cwd(), '.opencode', 'skills')];
+    },
+  },
+  {
+    key: 'cline',
+    label: 'Cline',
+    aliases: ['cline'],
+    getDirs: (useNativeDirs) => {
+      const baseDir = useNativeDirs ? homedir() : process.cwd();
+      return [join(baseDir, '.cline', 'skills')];
+    },
+  },
+  {
+    key: 'roo',
+    label: 'Roo',
+    aliases: ['roo'],
+    getDirs: (useNativeDirs) => {
+      const baseDir = useNativeDirs ? homedir() : process.cwd();
+      return [join(baseDir, '.roo', 'skills')];
+    },
+  },
+  {
+    key: 'openclaw',
+    label: 'OpenClaw',
+    aliases: ['openclaw'],
+    getDirs: (useNativeDirs) => {
+      const baseDir = useNativeDirs ? homedir() : process.cwd();
+      return [join(baseDir, '.openclaw', 'skills')];
+    },
+  },
 ];
 
 function getXdgConfigHome(): string {
   return process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
 }
 
-function hasExplicitTargets(options: InstallOptions): boolean {
+export function hasExplicitTargets(options: InstallOptions = {}): boolean {
   return Boolean(
     options.cc ||
     options.claudeCode ||
@@ -68,180 +158,215 @@ function hasExplicitTargets(options: InstallOptions): boolean {
   );
 }
 
+function getTargetDefinition(target: InstallTarget): InstallTargetDefinition {
+  const match = INSTALL_TARGETS.find((entry) => entry.key === target);
+  if (!match) {
+    throw new Error(`Unknown install target: ${target}`);
+  }
+  return match;
+}
+
+function getTargetsFromOptions(options: InstallOptions = {}): InstallTarget[] {
+  const targets: InstallTarget[] = [];
+
+  if (options.cc || options.claudeCode) targets.push('claude');
+  if (options.codex) targets.push('codex');
+  if (options.cursor) targets.push('cursor');
+  if (options.amp) targets.push('amp');
+  if (options.windsurf) targets.push('windsurf');
+  if (options.oc || options.opencode) targets.push('opencode');
+  if (options.cline) targets.push('cline');
+  if (options.roo) targets.push('roo');
+  if (options.openclaw) targets.push('openclaw');
+
+  return [...new Set(targets)];
+}
+
 function parseTargetToken(token: string): InstallTarget | null {
   const normalized = token.trim().toLowerCase();
   if (!normalized) {
     return null;
   }
 
-  if (normalized === 'cc' || normalized === 'claude' || normalized === 'claude-code') {
-    return 'claude';
-  }
-  if (normalized === 'oc' || normalized === 'opencode') {
-    return 'opencode';
-  }
-  if (normalized === 'codex' || normalized === 'cursor' || normalized === 'amp' || normalized === 'windsurf' || normalized === 'cline' || normalized === 'roo' || normalized === 'openclaw') {
-    return normalized;
-  }
-
-  return null;
+  const match = INSTALL_TARGETS.find((entry) => entry.aliases.includes(normalized));
+  return match?.key || null;
 }
 
-export function resolveInstallTargets(options: InstallOptions = {}): InstallTarget[] {
-  const targets: InstallTarget[] = [];
-
-  if (options.cc || options.claudeCode) {
-    targets.push('claude');
-  }
-  if (options.codex) {
-    targets.push('codex');
-  }
-  if (options.cursor) {
-    targets.push('cursor');
-  }
-  if (options.amp) {
-    targets.push('amp');
-  }
-  if (options.windsurf) {
-    targets.push('windsurf');
-  }
-  if (options.oc || options.opencode) {
-    targets.push('opencode');
-  }
-  if (options.cline) {
-    targets.push('cline');
-  }
-  if (options.roo) {
-    targets.push('roo');
-  }
-  if (options.openclaw) {
-    targets.push('openclaw');
-  }
-
-  if (targets.length === 0) {
-    const fromEnv = (process.env.SKILO_TARGETS || '')
+function getTargetsFromEnv(): InstallTarget[] {
+  return [...new Set(
+    (process.env.SKILO_TARGETS || '')
       .split(',')
       .map(parseTargetToken)
-      .filter((value): value is InstallTarget => value !== null);
-    if (fromEnv.length > 0) {
-      return [...new Set(fromEnv)];
+      .filter((value): value is InstallTarget => value !== null)
+  )];
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function detectInstalledTargets(): Promise<InstallTarget[]> {
+  const detected: InstallTarget[] = [];
+
+  for (const target of INSTALL_TARGETS) {
+    const dirs = target.getDirs(true);
+    if ((await Promise.all(dirs.map(pathExists))).some(Boolean)) {
+      detected.push(target.key);
     }
   }
 
-  return targets.length > 0 ? targets : ['claude'];
+  return detected;
 }
 
-export function getInstallDirs(options: InstallOptions = {}): string[] {
-  const targets = resolveInstallTargets(options);
-  const useNativeDirs = options.global || hasExplicitTargets(options);
-  const baseDir = useNativeDirs ? homedir() : process.cwd();
-  const xdgConfigHome = useNativeDirs ? getXdgConfigHome() : join(baseDir, '.config');
+function renderTargetPicker(targets: InstallTarget[]): string {
+  const lines: string[] = [];
+  lines.push('Choose install targets');
+  lines.push('Press enter to install to all detected tools.');
+  lines.push('');
+
+  for (const [index, target] of targets.entries()) {
+    lines.push(`  ${index + 1}. ${getTargetDefinition(target).label}`);
+  }
+
+  lines.push('');
+  lines.push('Examples: 1, 1 3, a=all, q=cancel');
+  return lines.join('\n');
+}
+
+async function promptForInstallTargets(targets: InstallTarget[]): Promise<InstallTarget[]> {
+  if (!process.stdin.isTTY || !isInteractiveOutput()) {
+    return targets;
+  }
+
+  printSection('Install targets');
+  printNote('detected', targets.map((target) => getTargetDefinition(target).label).join(', '));
+  printPrimary(renderTargetPicker(targets));
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise<InstallTarget[]>((resolve) => {
+    rl.question('> ', (answer) => {
+      rl.close();
+      const trimmed = answer.trim().toLowerCase();
+
+      if (trimmed === '' || trimmed === 'a') {
+        resolve(targets);
+        return;
+      }
+
+      if (trimmed === 'q') {
+        resolve([]);
+        return;
+      }
+
+      const selected = trimmed
+        .split(/\s+/)
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value >= 1 && value <= targets.length)
+        .map((value) => targets[value - 1]);
+
+      resolve([...new Set(selected)]);
+    });
+  });
+}
+
+export async function resolveInstallTargets(
+  options: InstallOptions = {}
+): Promise<InstallTargetResolution> {
+  const explicitTargets = getTargetsFromOptions(options);
+  if (explicitTargets.length > 0) {
+    return {
+      mode: 'explicit',
+      targets: explicitTargets,
+      detectedTargets: [],
+    };
+  }
+
+  const envTargets = getTargetsFromEnv();
+  if (envTargets.length > 0) {
+    return {
+      mode: 'env',
+      targets: envTargets,
+      detectedTargets: [],
+    };
+  }
+
+  const detectedTargets = await detectInstalledTargets();
+  if (detectedTargets.length === 1) {
+    return {
+      mode: 'detected',
+      targets: detectedTargets,
+      detectedTargets,
+    };
+  }
+
+  if (detectedTargets.length > 1) {
+    if (isInteractiveOutput() && process.stdin.isTTY && !isJsonOutput()) {
+      const selectedTargets = await promptForInstallTargets(detectedTargets);
+      return {
+        mode: 'selected',
+        targets: selectedTargets,
+        detectedTargets,
+      };
+    }
+
+    return {
+      mode: 'needs_target',
+      targets: [],
+      detectedTargets,
+    };
+  }
+
+  return {
+    mode: 'default',
+    targets: ['claude'],
+    detectedTargets: [],
+  };
+}
+
+export function getInstallDirs(targets: InstallTarget[], options: InstallOptions = {}): string[] {
+  const useNativeDirs = options.global || hasExplicitTargets(options) || targets.length > 0;
   const dirs = new Set<string>();
 
   for (const target of targets) {
-    if (target === 'claude') {
-      dirs.add(join(baseDir, '.claude', 'skills'));
-      continue;
+    for (const dir of getTargetDefinition(target).getDirs(useNativeDirs)) {
+      dirs.add(dir);
     }
-
-    if (target === 'codex') {
-      dirs.add(join(baseDir, '.agents', 'skills'));
-      dirs.add(join(baseDir, '.codex', 'skills'));
-      continue;
-    }
-
-    if (target === 'cursor') {
-      dirs.add(join(baseDir, '.cursor', 'skills'));
-      continue;
-    }
-
-    if (target === 'amp') {
-      dirs.add(join(xdgConfigHome, 'agents', 'skills'));
-      continue;
-    }
-
-    if (target === 'windsurf') {
-      dirs.add(join(baseDir, '.codeium', 'windsurf', 'skills'));
-      continue;
-    }
-
-    if (target === 'opencode') {
-      dirs.add(useNativeDirs ? join(xdgConfigHome, 'opencode', 'skills') : join(baseDir, '.opencode', 'skills'));
-      continue;
-    }
-
-    if (target === 'cline') {
-      dirs.add(join(baseDir, '.cline', 'skills'));
-      continue;
-    }
-
-    if (target === 'roo') {
-      dirs.add(join(baseDir, '.roo', 'skills'));
-      continue;
-    }
-
-    dirs.add(
-      useNativeDirs
-        ? join(homedir(), '.openclaw', 'skills')
-        : join(baseDir, '.openclaw', 'skills')
-    );
   }
 
   return [...dirs];
 }
 
-export function getInstallDestinations(options: InstallOptions = {}): InstallDestination[] {
-  const targets = resolveInstallTargets(options);
-  const useNativeDirs = options.global || hasExplicitTargets(options);
-  const baseDir = useNativeDirs ? homedir() : process.cwd();
-  const xdgConfigHome = useNativeDirs ? getXdgConfigHome() : join(baseDir, '.config');
+export function getInstallDestinations(
+  targets: InstallTarget[],
+  options: InstallOptions = {}
+): InstallDestination[] {
+  const useNativeDirs = options.global || hasExplicitTargets(options) || targets.length > 0;
 
   return targets.map((target) => {
-    const label = INSTALL_TARGETS.find((entry) => entry.key === target)?.label || target;
-
-    if (target === 'claude') {
-      return { key: target, label, dirs: [join(baseDir, '.claude', 'skills')] };
-    }
-    if (target === 'codex') {
-      return {
-        key: target,
-        label,
-        dirs: [join(baseDir, '.agents', 'skills'), join(baseDir, '.codex', 'skills')],
-      };
-    }
-    if (target === 'cursor') {
-      return { key: target, label, dirs: [join(baseDir, '.cursor', 'skills')] };
-    }
-    if (target === 'amp') {
-      return { key: target, label, dirs: [join(xdgConfigHome, 'agents', 'skills')] };
-    }
-    if (target === 'windsurf') {
-      return { key: target, label, dirs: [join(baseDir, '.codeium', 'windsurf', 'skills')] };
-    }
-    if (target === 'opencode') {
-      return {
-        key: target,
-        label,
-        dirs: [useNativeDirs ? join(xdgConfigHome, 'opencode', 'skills') : join(baseDir, '.opencode', 'skills')],
-      };
-    }
-    if (target === 'cline') {
-      return { key: target, label, dirs: [join(baseDir, '.cline', 'skills')] };
-    }
-    if (target === 'roo') {
-      return { key: target, label, dirs: [join(baseDir, '.roo', 'skills')] };
-    }
-
+    const definition = getTargetDefinition(target);
     return {
-      key: target,
-      label,
-      dirs: [useNativeDirs ? join(homedir(), '.openclaw', 'skills') : join(baseDir, '.openclaw', 'skills')],
+      key: definition.key,
+      label: definition.label,
+      dirs: definition.getDirs(useNativeDirs),
     };
   });
 }
 
-export function describeInstallTargets(options: InstallOptions = {}): string {
-  return resolveInstallTargets(options)
-    .map((target) => INSTALL_TARGETS.find((entry) => entry.key === target)?.label || target)
-    .join(', ');
+export function describeInstallTargets(targets: InstallTarget[]): string {
+  return targets.map((target) => getTargetDefinition(target).label).join(', ');
+}
+
+export function getTargetFlag(target: InstallTarget): string {
+  if (target === 'claude') return '--cc';
+  if (target === 'opencode') return '--oc';
+  return `--${target}`;
 }

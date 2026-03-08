@@ -71,6 +71,8 @@ function Docs() {
             { out: "\u2192 skilo.xyz/s/a3xK9mP2" },
             { cmd: "skilo add skilo.xyz/s/a3xK9mP2" },
             { out: "\u2713 Installed code-reviewer" },
+            { cmd: "skilo pack ./code-reviewer flrabbit/original-landing-page-builder --name \"Starter pack\"" },
+            { out: "\u2192 skilo.xyz/p/abc123" },
           ]} />
           <p className="text-stone-500">
             No account required. Skills are published anonymously by default. You can claim them later with <Code>skilo claim</Code>.
@@ -117,8 +119,13 @@ function Docs() {
                 <Code>skilo add &lt;skill&gt;</Code>
               </p>
               <p className="text-stone-500 text-sm mt-1">
-                Install a skill. Accepts a share URL, namespace/name, .skl file, or GitHub URL.
+                Install a skill or pack. Accepts a share URL, pack URL, namespace/name, .skl file, GitHub URL, or local path.
               </p>
+              <ul className="text-stone-500 text-sm list-disc pl-5 mt-1 flex flex-col gap-0.5">
+                <li>Auto-installs into a detected tool when exactly one is found.</li>
+                <li>Prompts once in interactive runs when multiple tools are detected.</li>
+                <li>Use explicit flags or <Code>SKILO_TARGETS</Code> in non-interactive environments.</li>
+              </ul>
             </div>
 
             <div>

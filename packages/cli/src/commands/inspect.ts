@@ -22,6 +22,7 @@ export async function inspectCommand(source: string): Promise<void> {
     if (packToken) {
       const client = await getClient();
       const pack = await client.resolvePack(packToken);
+      const verifiedCount = pack.skills.filter((skill) => skill.verified).length;
 
       if (isJsonOutput()) {
         printJson({
@@ -35,11 +36,15 @@ export async function inspectCommand(source: string): Promise<void> {
 
       printSection(pack.name || 'Skill Pack', 'primary');
       printKeyValue('skills', String(pack.skills.length));
+      printKeyValue('verified', `${verifiedCount}/${pack.skills.length}`);
       printPrimary('');
       for (const skill of pack.skills) {
         printPrimary(`${skill.namespace}/${skill.name} ${skill.version ? `v${skill.version}` : ''}`.trim());
         if (skill.description) {
           printKeyValue('description', skill.description);
+        }
+        if (skill.visibility) {
+          printKeyValue('visibility', skill.visibility);
         }
       }
       printPrimary('');
@@ -58,7 +63,20 @@ export async function inspectCommand(source: string): Promise<void> {
       keywords?: string[];
       checksum?: string;
       size?: number;
+      verified?: boolean;
+      trust?: {
+        verified: boolean;
+        hasSignature: boolean;
+        visibility: 'public' | 'unlisted';
+      };
     };
+    let linkInfo: {
+      oneTime: boolean;
+      expiresAt?: number | null;
+      maxUses?: number | null;
+      usesCount: number;
+      passwordProtected: boolean;
+    } | undefined;
 
     if (source.startsWith('https://skilo.xyz/s/')) {
       // Inspect share link
@@ -76,6 +94,7 @@ export async function inspectCommand(source: string): Promise<void> {
         return;
       }
       skill = data.skill;
+      linkInfo = data.link;
     } else if (source.includes('/')) {
       // Inspect by namespace/name
       const [namespace, name] = source.split('/');
@@ -97,6 +116,8 @@ export async function inspectCommand(source: string): Promise<void> {
         command: 'inspect',
         source,
         skill,
+        link: linkInfo || null,
+        trust: skill.trust || null,
         installCommand: `skilo add ${source}`,
       });
       return;
@@ -125,8 +146,21 @@ export async function inspectCommand(source: string): Promise<void> {
     if (skill.size) {
       printKeyValue('size', `${(skill.size / 1024).toFixed(2)} KB`);
     }
+    if (skill.trust) {
+      printKeyValue('trust', skill.trust.verified ? 'verified signature' : 'unsigned');
+      printKeyValue('visibility', skill.trust.visibility);
+    }
     if (skill.checksum) {
       printKeyValue('checksum', `${skill.checksum.substring(0, 16)}...`);
+    }
+    if (linkInfo?.oneTime) {
+      printKeyValue('link', 'one-time');
+    }
+    if (linkInfo?.expiresAt) {
+      printKeyValue('expires', new Date(linkInfo.expiresAt).toISOString());
+    }
+    if (linkInfo?.maxUses) {
+      printKeyValue('max uses', String(linkInfo.maxUses));
     }
 
     printPrimary('');

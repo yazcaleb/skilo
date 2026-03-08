@@ -128,10 +128,11 @@ packsRouter.get('/:token', rateLimiters.resolveShare, async (c) => {
     // Get skills via pack_items -> share_links -> skills
     const itemsStmt = await c.env.DB.prepare(
       `SELECT s.namespace, s.name, s.description, s.latest_version as version,
-              sl.token as shareToken
+              sl.token as shareToken, sv.signature, s.privacy
        FROM pack_items pi
        JOIN share_links sl ON pi.share_link_id = sl.id
        JOIN skills s ON sl.skill_id = s.id
+       LEFT JOIN skill_versions sv ON s.id = sv.skill_id AND sv.version = s.latest_version
        WHERE pi.pack_id = ?
        ORDER BY pi.position`
     );
@@ -144,6 +145,8 @@ packsRouter.get('/:token', rateLimiters.resolveShare, async (c) => {
       version: row.version,
       shareToken: row.shareToken,
       url: `https://skilo.xyz/s/${row.shareToken}`,
+      verified: Boolean(row.signature),
+      visibility: row.privacy === 'public' ? 'public' : 'unlisted',
     }));
 
     return c.json({

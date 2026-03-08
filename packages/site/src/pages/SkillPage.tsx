@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { renderMarkdown } from "../lib/markdown";
 import { CopyIcon } from "../components/icons";
 import { api } from "../api/skilo";
-import type { SkillMetadata } from "../api/skilo";
+import type { ShareLinkInfo, SkillMetadata } from "../api/skilo";
 
 const NAV_LINK = "text-sm underline decoration-stone-400/50 underline-offset-[2.5px] hover:decoration-stone-500 transition-[text-decoration-color] duration-150";
 const PRIMARY_BTN = "inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded text-[#0a1a1a] text-sm font-medium whitespace-nowrap bg-emerald-100 shadow-[0_2px_0_0_#6ee7b7] active:translate-y-px active:shadow-[0_1px_0_0_#34d399] transition-[transform,box-shadow] duration-75 cursor-pointer select-none";
@@ -12,6 +12,8 @@ const MAIN = "flex flex-col gap-4 max-w-[600px] mx-auto p-5 pt-28 pb-20 lg:p-10 
 function SkillPage() {
   const { token } = useParams<{ token: string }>();
   const [skill, setSkill] = useState<SkillMetadata | null>(null);
+  const [linkInfo, setLinkInfo] = useState<ShareLinkInfo | null>(null);
+  const [trust, setTrust] = useState<SkillMetadata["trust"] | null>(null);
   const [password, setPassword] = useState("");
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -37,6 +39,8 @@ function SkillPage() {
           setRequiresPassword(true);
         } else {
           setSkill(data.skill);
+          setLinkInfo(data.link || null);
+          setTrust(data.trust || data.skill.trust || null);
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load skill"))
@@ -50,8 +54,10 @@ function SkillPage() {
     try {
       setVerifying(true);
       setError(null);
-      const verifiedSkill = await api.verifySharePassword(token, password);
-      setSkill(verifiedSkill);
+      const verified = await api.verifySharePassword(token, password);
+      setSkill(verified.skill);
+      setLinkInfo(verified.link || null);
+      setTrust(verified.trust || verified.skill.trust || null);
       setRequiresPassword(false);
       setPassword("");
     } catch (err) {
@@ -62,6 +68,7 @@ function SkillPage() {
   };
 
   const installCmd = `npx skilo-cli add skilo.xyz/s/${token}`;
+  const inspectCmd = `npx skilo-cli inspect skilo.xyz/s/${token}`;
 
   function handleCopy() {
     navigator.clipboard.writeText(installCmd);
@@ -152,6 +159,29 @@ function SkillPage() {
           v{skill.version}
           {skill.author && <> &middot; {skill.author}</>}
         </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+            {trust?.verified || skill.verified ? "Verified signature" : "Unsigned"}
+          </span>
+          <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+            {trust?.visibility === "public" || skill.listed ? "Public" : "Unlisted"}
+          </span>
+          {linkInfo?.oneTime && (
+            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+              One-time link
+            </span>
+          )}
+          {linkInfo?.expiresAt && (
+            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+              Expires {new Date(linkInfo.expiresAt).toLocaleString()}
+            </span>
+          )}
+          {linkInfo?.maxUses && (
+            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+              Max {linkInfo.maxUses} uses
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Install */}
@@ -166,6 +196,12 @@ function SkillPage() {
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
+        <p className="text-xs text-stone-400">
+          Skilo auto-detects installed tools. Add <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--cc</code>, <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--codex</code>, <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--cursor</code>, or <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--oc</code> to force a target.
+        </p>
+        <code className="block overflow-x-auto rounded bg-stone-50 px-3 py-2 font-mono text-[12px] text-stone-500 whitespace-nowrap">
+          {inspectCmd}
+        </code>
       </div>
 
       {/* Details */}
@@ -175,6 +211,12 @@ function SkillPage() {
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-stone-400">Checksum</dt>
           <dd className="font-mono text-[13px] text-stone-500 truncate">{skill.checksum}</dd>
+
+          <dt className="text-stone-400">Trust</dt>
+          <dd className="text-stone-500">{trust?.verified || skill.verified ? "Verified signature" : "Unsigned or anonymous"}</dd>
+
+          <dt className="text-stone-400">Visibility</dt>
+          <dd className="text-stone-500">{trust?.visibility === "public" || skill.listed ? "Public" : "Unlisted share"}</dd>
 
           <dt className="text-stone-400">Size</dt>
           <dd className="text-stone-500">{(skill.size / 1024).toFixed(1)} KB</dd>

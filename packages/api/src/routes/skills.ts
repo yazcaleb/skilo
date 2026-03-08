@@ -4,6 +4,45 @@ import { rateLimiters } from '../middleware/rateLimit.js';
 
 export const skillsRouter = new Hono<{ Bindings: Env }>();
 
+type SkillIdRow = { id: string };
+type SkillRecordRow = {
+  id: string;
+  name: string;
+  namespace: string;
+  description: string;
+  version: string;
+  privacy: string;
+  created_at: number;
+  updated_at: number;
+};
+type SkillVersionRow = {
+  tarball_url: string;
+  size: number;
+  checksumsha256: string;
+  metadata_json: string | null;
+  signature: string | null;
+};
+type ShareRow = {
+  id: string;
+  token: string;
+  one_time: number;
+  expires_at: number | null;
+  max_uses: number | null;
+  uses_count: number;
+  password_hash: string | null;
+  name: string;
+  namespace: string;
+  description: string;
+  latest_version: string;
+  created_at: number;
+  updated_at: number;
+  size: number | null;
+  checksumsha256: string | null;
+  metadata_json: string | null;
+  signature: string | null;
+  privacy: string;
+};
+
 function isPublicSkill(privacy: unknown): boolean {
   return privacy === 'public';
 }
@@ -35,6 +74,14 @@ function parseVersionMetadata(raw: unknown): {
 
 function buildTarballUrl(namespace: string, name: string, version: string): string {
   return `/v1/skills/${namespace}/${name}/tarball/${version}`;
+}
+
+function buildTrustInfo(signature: unknown, privacy: unknown) {
+  return {
+    verified: typeof signature === 'string' && signature.length > 0,
+    hasSignature: typeof signature === 'string' && signature.length > 0,
+    visibility: isPublicSkill(privacy) ? 'public' : 'unlisted',
+  };
 }
 
 // List/search skills - only public skills
@@ -116,7 +163,7 @@ skillsRouter.post('/', rateLimiters.publish, async (c) => {
     let skillStmt = await c.env.DB.prepare(
       `SELECT id FROM skills WHERE namespace = ? AND name = ?`
     );
-    let skill = await skillStmt.bind(namespace, name).first();
+    let skill = await skillStmt.bind(namespace, name).first<SkillIdRow>();
 
     let skillId: string;
 
@@ -159,14 +206,14 @@ skillsRouter.post('/', rateLimiters.publish, async (c) => {
 skillsRouter.post('/:namespace/:name/share', rateLimiters.createShare, async (c) => {
   const namespace = c.req.param('namespace');
   const name = c.req.param('name');
-  const body = await c.req.json();
+  const body = await c.req.json<Record<string, unknown>>();
 
   try {
     // Get skill
     const skillStmt = await c.env.DB.prepare(
       `SELECT id FROM skills WHERE namespace = ? AND name = ?`
     );
-    const skill = await skillStmt.bind(namespace, name).first();
+    const skill = await skillStmt.bind(namespace, name).first<SkillIdRow>();
 
     if (!skill) {
       return c.json({ error: 'not_found', message: 'Skill not found' }, 404);
@@ -177,9 +224,9 @@ skillsRouter.post('/:namespace/:name/share', rateLimiters.createShare, async (c)
 
     // Parse options
     const oneTime = body.one_time === true;
-    const expiresAt = body.expires_at ? Math.floor(body.expires_at / 1000) : null;
-    const maxUses = body.max_uses || null;
-    const passwordHash = body.password ? await hashPassword(body.password) : null;
+    const expiresAt = typeof body.expires_at === 'number' ? Math.floor(body.expires_at / 1000) : null;
+    const maxUses = typeof body.max_uses === 'number' ? body.max_uses : null;
+    const passwordHash = typeof body.password === 'string' ? await hashPassword(body.password) : null;
 
     // Create share link
     const shareId = generateId();
@@ -211,13 +258,13 @@ skillsRouter.get('/share/:token', rateLimiters.resolveShare, async (c) => {
     const shareStmt = await c.env.DB.prepare(
       `SELECT sl.*, s.name, s.namespace, s.description, s.latest_version,
               s.created_at, s.updated_at, sv.tarball_url, sv.size,
-              sv.checksumsha256, sv.metadata_json
+              sv.checksumsha256, sv.metadata_json, sv.signature, s.privacy
        FROM share_links sl
        JOIN skills s ON sl.skill_id = s.id
        LEFT JOIN skill_versions sv ON s.id = sv.skill_id AND sv.version = s.latest_version
        WHERE sl.token = ?`
     );
-    const share = await shareStmt.bind(token).first();
+    const share = await shareStmt.bind(token).first<ShareRow>();
 
     if (!share) {
       return c.json({ error: 'not_found', message: 'Share link not found' }, 404);
@@ -249,6 +296,7 @@ skillsRouter.get('/share/:token', rateLimiters.resolveShare, async (c) => {
     }
 
     const metadata = parseVersionMetadata(share.metadata_json);
+    const trust = buildTrustInfo(share.signature, share.privacy);
 
     return c.json({
       skill: {
@@ -264,9 +312,19 @@ skillsRouter.get('/share/:token', rateLimiters.resolveShare, async (c) => {
         size: share.size || 0,
         checksum: share.checksumsha256 || '',
         listed: false,
+        verified: trust.verified,
         createdAt: share.created_at,
         updatedAt: share.updated_at,
       },
+      link: {
+        token: share.token,
+        oneTime: Boolean(share.one_time),
+        expiresAt: share.expires_at ? share.expires_at * 1000 : null,
+        maxUses: share.max_uses || null,
+        usesCount: share.uses_count || 0,
+        passwordProtected: Boolean(share.password_hash),
+      },
+      trust,
       requiresPassword: false,
     });
   } catch (e) {
@@ -278,8 +336,8 @@ skillsRouter.get('/share/:token', rateLimiters.resolveShare, async (c) => {
 // Verify share password
 skillsRouter.post('/share/:token/verify', async (c) => {
   const token = c.req.param('token');
-  const body = await c.req.json();
-  const password = body.password;
+  const body = await c.req.json<Record<string, unknown>>();
+  const password = typeof body.password === 'string' ? body.password : '';
 
   if (!password) {
     return c.json({ error: 'validation_error', message: 'Password is required' }, 400);
@@ -289,13 +347,13 @@ skillsRouter.post('/share/:token/verify', async (c) => {
     const shareStmt = await c.env.DB.prepare(
       `SELECT sl.*, s.name, s.namespace, s.description, s.latest_version,
               s.created_at, s.updated_at, sv.tarball_url, sv.size,
-              sv.checksumsha256, sv.metadata_json
+              sv.checksumsha256, sv.metadata_json, sv.signature, s.privacy
        FROM share_links sl
        JOIN skills s ON sl.skill_id = s.id
        LEFT JOIN skill_versions sv ON s.id = sv.skill_id AND sv.version = s.latest_version
        WHERE sl.token = ?`
     );
-    const share = await shareStmt.bind(token).first();
+    const share = await shareStmt.bind(token).first<ShareRow>();
 
     if (!share) {
       return c.json({ error: 'not_found', message: 'Share link not found' }, 404);
@@ -311,6 +369,7 @@ skillsRouter.post('/share/:token/verify', async (c) => {
     ).bind(share.id).run();
 
     const metadata = parseVersionMetadata(share.metadata_json);
+    const trust = buildTrustInfo(share.signature, share.privacy);
 
     return c.json({
       skill: {
@@ -326,9 +385,19 @@ skillsRouter.post('/share/:token/verify', async (c) => {
         size: share.size || 0,
         checksum: share.checksumsha256 || '',
         listed: false,
+        verified: trust.verified,
         createdAt: share.created_at,
         updatedAt: share.updated_at,
       },
+      link: {
+        token: share.token,
+        oneTime: Boolean(share.one_time),
+        expiresAt: share.expires_at ? share.expires_at * 1000 : null,
+        maxUses: share.max_uses || null,
+        usesCount: share.uses_count || 0,
+        passwordProtected: Boolean(share.password_hash),
+      },
+      trust,
     });
   } catch (e) {
     console.error('Password verify error:', e);
@@ -348,20 +417,21 @@ skillsRouter.get('/:namespace/:name', async (c) => {
        WHERE s.namespace = ? AND s.name = ?
        LIMIT 1`
     );
-    const result = await stmt.bind(namespace, name).first();
+    const result = await stmt.bind(namespace, name).first<SkillRecordRow>();
 
     if (!result) {
       return c.json({ error: 'not_found', message: 'Skill not found' }, 404);
     }
 
     const versionStmt = await c.env.DB.prepare(
-      `SELECT tarball_url, size, checksumsha256, metadata_json
+      `SELECT tarball_url, size, checksumsha256, metadata_json, signature
        FROM skill_versions
        WHERE skill_id = ? AND version = ?
        LIMIT 1`
     );
-    const version = await versionStmt.bind(result.id, result.version).first();
+    const version = await versionStmt.bind(result.id, result.version).first<SkillVersionRow>();
     const metadata = parseVersionMetadata(version?.metadata_json);
+    const trust = buildTrustInfo(version?.signature, result.privacy);
 
     return c.json({
       name: result.name,
@@ -376,6 +446,8 @@ skillsRouter.get('/:namespace/:name', async (c) => {
       size: version?.size || 0,
       checksum: version?.checksumsha256 || '',
       listed: isPublicSkill(result.privacy),
+      verified: trust.verified,
+      trust,
       createdAt: result.created_at,
       updatedAt: result.updated_at,
     });
@@ -394,7 +466,7 @@ skillsRouter.get('/:namespace/:name/versions', async (c) => {
     const skillStmt = await c.env.DB.prepare(
       `SELECT id FROM skills WHERE namespace = ? AND name = ?`
     );
-    const skill = await skillStmt.bind(namespace, name).first();
+    const skill = await skillStmt.bind(namespace, name).first<SkillIdRow>();
 
     if (!skill) {
       return c.json({ error: 'not_found', message: 'Skill not found' }, 404);
@@ -424,7 +496,7 @@ skillsRouter.get('/:namespace/:name/tarball/:version', async (c) => {
     const skillStmt = await c.env.DB.prepare(
       `SELECT id FROM skills WHERE namespace = ? AND name = ?`
     );
-    const skill = await skillStmt.bind(namespace, name).first();
+    const skill = await skillStmt.bind(namespace, name).first<SkillIdRow>();
 
     if (!skill) {
       return c.json({ error: 'not_found', message: 'Skill not found' }, 404);
@@ -434,7 +506,7 @@ skillsRouter.get('/:namespace/:name/tarball/:version', async (c) => {
       `SELECT tarball_url, size FROM skill_versions
        WHERE skill_id = ? AND version = ?`
     );
-    const versionData = await versionStmt.bind(skill.id, version).first();
+    const versionData = await versionStmt.bind(skill.id, version).first<{ tarball_url: string; size: number }>();
 
     if (!versionData) {
       return c.json({ error: 'not_found', message: 'Version not found' }, 404);

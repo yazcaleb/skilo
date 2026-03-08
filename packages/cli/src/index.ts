@@ -47,22 +47,26 @@ function addInstallTargetOptions(command: Command): Command {
 
 program
   .name('skilo')
-  .description('Tiny sharing layer for agent skills')
-  .version('1.0.12');
+  .description('Share agent skills with a link. No repo required.')
+  .version('1.0.13');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);
 program.showHelpAfterError('\nRun "skilo --help" for usage.');
 program.addHelpText('after', `
-Quick start:
+Primary commands:
   skilo share ./my-skill
-  skilo add https://skilo.xyz/s/abc123 --cc
-  skilo add namespace/skill-name --codex
-  skilo inspect namespace/skill-name
+  skilo add https://skilo.xyz/s/abc123
+  skilo pack ./skill-a namespace/skill-b https://skilo.xyz/s/abc123 --name "Starter pack"
 
 Agent entrypoints:
+  skilo --json
+  https://skilo.xyz
   https://skilo.xyz/llms.txt
-  skilo --help
+
+Compatibility aliases:
+  skilo install <source>   same as add
+  skilo import <source>    install from GitHub, bundles, URLs, or local paths
 `);
 
 // Auth (optional)
@@ -161,47 +165,66 @@ program
 
 function printInteractiveWelcome(): void {
   printSection('Skilo');
-  printPrimary('Share, install, inspect, and publish agent skills.');
+  printPrimary('Share agent skills with a link. No repo required.');
   blankLine();
 
-  printSection('Most common');
+  printSection('Start here');
   printPrimary('  Share a local skill');
   printPrimary('    skilo share ./my-skill');
-  printPrimary('  Install from a Skilo link');
-  printPrimary('    skilo add https://skilo.xyz/s/abc123 --cc');
-  printPrimary('  Install from the registry');
-  printPrimary('    skilo add namespace/skill-name --codex');
-  printPrimary('  Review before installing');
-  printPrimary('    skilo inspect namespace/skill-name');
+  printPrimary('  Add a skill or pack');
+  printPrimary('    skilo add https://skilo.xyz/s/abc123');
+  printPrimary('    skilo add https://skilo.xyz/p/abc123');
+  printPrimary('  Curate a pack');
+  printPrimary('    skilo pack ./reviewer namespace/design-system --name "Starter pack"');
   blankLine();
 
-  printSection('Works with');
-  printPrimary('  Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, OpenClaw');
+  printSection('Inputs');
+  printPrimary('  Skilo links, pack links, namespace/name refs, GitHub repos, bundles, local paths');
   blankLine();
 
-  printSection('Start as an agent');
-  printPrimary('  Read https://skilo.xyz/llms.txt');
-  printPrimary('  Or run skilo --help for the full command surface');
+  printSection('Install behavior');
+  printPrimary('  Explicit flags win: --cc, --codex, --cursor, --oc, and others');
+  printPrimary('  Without flags, Skilo detects installed tools and routes you there');
   blankLine();
 
-  printSection('Docs');
+  printSection('Agent entrypoints');
+  printPrimary('  skilo --json');
+  printPrimary('  https://skilo.xyz');
+  printPrimary('  https://skilo.xyz/llms.txt');
+  blankLine();
+
+  printSection('More');
   printPrimary('  https://skilo.xyz');
   printPrimary('  https://skilo.xyz/docs');
+  printPrimary('  skilo --help');
 }
 
 function printMachineWelcome(): void {
   printJson({
     name: 'skilo-cli',
-    purpose: 'Share, install, inspect, and publish agent skills.',
+    purpose: 'Share agent skills with a link. No repo required.',
     docs: 'https://skilo.xyz/docs',
     llms: 'https://skilo.xyz/llms.txt',
+    website: 'https://skilo.xyz',
     help: 'skilo --help',
-    examples: {
+    primaryCommands: {
       shareLocal: 'skilo share ./my-skill',
-      installLink: 'skilo add https://skilo.xyz/s/abc123 --cc',
-      installRef: 'skilo add namespace/skill-name --codex',
-      inspect: 'skilo inspect namespace/skill-name',
+      addLink: 'skilo add https://skilo.xyz/s/abc123',
+      addPack: 'skilo add https://skilo.xyz/p/abc123',
+      pack: 'skilo pack ./reviewer namespace/design-system --name "Starter pack"',
     },
+    compatibilityAliases: {
+      install: 'skilo install <source>',
+      import: 'skilo import <source>',
+    },
+    acceptedInputs: [
+      'share-link',
+      'pack-link',
+      'registry-ref',
+      'github-repo',
+      'bundle',
+      'local-path',
+    ],
     supportedTargets: [
       'claude-code',
       'codex',
@@ -213,6 +236,12 @@ function printMachineWelcome(): void {
       'roo',
       'openclaw',
     ],
+    installBehavior: {
+      explicitFlagsWin: true,
+      env: 'SKILO_TARGETS',
+      autoDetectsInstalledTools: true,
+      nonInteractiveRequiresExplicitTargetWhenMultipleDetected: true,
+    },
   });
 }
 

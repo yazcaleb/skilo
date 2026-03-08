@@ -1,6 +1,6 @@
 # Skilo
 
-Share agent skills with a link. Publish and install `SKILL.md` artifacts across Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, and OpenClaw.
+Share agent skills with a link. No repo required.
 
 [![Website](https://img.shields.io/badge/website-skilo.xyz-black)](https://skilo.xyz)
 [![npm version](https://badge.fury.io/js/skilo-cli.svg)](https://www.npmjs.com/package/skilo-cli)
@@ -31,7 +31,7 @@ Current skill sharing usually means repos, manifests, or manual copy-paste. Skil
 ## Features
 
 - **⚡ Share instantly** - Create a link in seconds, no registration required
-- **🌐 Install anywhere** - Add into Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, or OpenClaw with explicit target flags
+- **🌐 Add anywhere** - Install into Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, or OpenClaw with auto-detection or explicit target flags
 - **🔒 Trust what you install** - Inspect, verify checksums, then add with confidence
 - **⏱️ Expiring links** - One-time use, time-limited, or max-uses links
 - **🔐 Password protection** - Extra security for sensitive skills
@@ -71,16 +71,18 @@ skilo share ./my-skill --password
 ### Install a skill
 
 ```bash
-# From a share link into Claude Code
-skilo add https://skilo.xyz/s/a3xK9mP2 --cc
+# From a share link
+skilo add https://skilo.xyz/s/a3xK9mP2
 
 # Bare Skilo links also work
-skilo add skilo.xyz/s/a3xK9mP2 --cc
+skilo add skilo.xyz/s/a3xK9mP2
 
-# Into OpenCode
+# Auto-detects installed tools. Force a target when needed.
+skilo add https://skilo.xyz/s/a3xK9mP2 --cc
+skilo add https://skilo.xyz/s/a3xK9mP2 --codex
 skilo add https://skilo.xyz/s/a3xK9mP2 --oc
 
-# Into Codex, Cursor, and Roo
+# Into multiple targets explicitly
 skilo add https://skilo.xyz/s/a3xK9mP2 --codex --cursor --roo
 
 # From namespace/name
@@ -99,6 +101,11 @@ skilo import ./skill.skl
 ```
 
 Skilo now supports Vercel-style multi-skill GitHub repos directly. Use `--list` to inspect discovered skills, `--skill <name>` to install a specific one, or `--all` to install everything in the source repo.
+
+Without target flags:
+- if exactly one supported tool is detected, Skilo installs there automatically
+- if multiple tools are detected, TTY runs prompt once and non-interactive runs return a structured no-op until you pass a target or set `SKILO_TARGETS`
+- if no tool is detected, Skilo falls back to Claude Code
 
 ### Create a curated pack
 

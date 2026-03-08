@@ -30,10 +30,10 @@ function Landing() {
         {/* ── Hero ── */}
         <div className="flex flex-col gap-2">
           <p className="text-lg font-medium text-black tracking-[-0.01em]">
-            Skill handoff for humans and agents.
+            Share agent skills with a link. No repo required.
           </p>
           <p className="text-stone-500">
-            Share a skill, install it into the right tool, or point an agent at Skilo and let it figure out the next step quickly.
+            Skilo turns any <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[13px]">SKILL.md</code> folder into a link or pack, then routes installs into the right tool for humans and agents.
           </p>
 
           <div className="mt-3 flex items-center gap-3">
@@ -76,7 +76,15 @@ function Landing() {
                 <span className="text-stone-200">skilo add skilo.xyz/s/a3xK9mP2</span>
               </div>
               <div className="pl-4 text-stone-500">
-                &#10003; Installed code-reviewer
+                &#10003; Detected Codex, installed code-reviewer
+              </div>
+              <div className="h-4" />
+              <div>
+                <span className="text-stone-600">$ </span>
+                <span className="text-stone-200">skilo pack ./reviewer flrabbit/original-landing-page-builder --name &quot;Starter pack&quot;</span>
+              </div>
+              <div className="pl-4 text-emerald-400/70">
+                &rarr; skilo.xyz/p/abc123
                 <span className="cursor-blink ml-0.5 inline-block h-[14px] w-[2px] bg-stone-500 align-text-bottom" />
               </div>
             </div>
@@ -99,37 +107,28 @@ function Landing() {
 
             <div>
               <p className="text-sm">
-                <span className="font-medium">Install</span>
+                <span className="font-medium">Add</span>
               </p>
               <p className="text-stone-500 text-sm mt-1">
-                <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo add &lt;link&gt;</code> downloads, verifies the SHA-256 checksum, and installs. Run <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo inspect</code> to review content before installing.
+                <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo add &lt;link|ref|repo&gt;</code> downloads, verifies, auto-detects installed tools, and installs into the right place. Run <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo inspect</code> first when you want a preflight.
               </p>
             </div>
 
             <div>
               <p className="text-sm">
-                <span className="font-medium">Route automatically</span>
+                <span className="font-medium">Pack</span>
               </p>
               <p className="text-stone-500 text-sm mt-1">
-                <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo add</code> and <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo import</code> accept links, refs, bundles, GitHub sources, and local paths. Use target flags like <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">--cc</code>, <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">--codex</code>, or <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">--oc</code> to land in the right tool.
+                <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo pack</code> bundles a curated set of skills into one link so a person or agent can install a whole setup in one command.
               </p>
             </div>
 
             <div>
               <p className="text-sm">
-                <span className="font-medium">Start cleanly</span>
+                <span className="font-medium">Inputs that just work</span>
               </p>
               <p className="text-stone-500 text-sm mt-1">
-                Humans can start with <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">npx skilo-cli</code>. Agents should use <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">npx skilo-cli --json</code> or read <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">/llms.txt</code>.
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm">
-                <span className="font-medium">Scale up</span>
-              </p>
-              <p className="text-stone-500 text-sm mt-1">
-                <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo share claude</code> discovers and shares every skill from a tool at once. It also supports <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">cursor</code>, <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">codex</code>, <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">amp</code>, and the rest of the native directory matrix.
+                Links, packs, registry refs, GitHub repos, bundles, and local paths all resolve through the same <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo add</code> flow. Humans can start with <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">npx skilo-cli</code>. Agents can start with <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">npx skilo-cli --json</code> or just fetch the root site.
               </p>
             </div>
           </div>

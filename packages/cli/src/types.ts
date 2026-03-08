@@ -25,6 +25,12 @@ export interface SkillMetadata {
   size: number;
   checksum: string;
   listed: boolean;
+  verified?: boolean;
+  trust?: {
+    verified: boolean;
+    hasSignature: boolean;
+    visibility: 'public' | 'unlisted';
+  };
   createdAt: number;
 }
 
@@ -50,6 +56,8 @@ export interface PackSkill {
   version: string;
   shareToken: string;
   url: string;
+  verified?: boolean;
+  visibility?: 'public' | 'unlisted';
 }
 
 export interface PackData {

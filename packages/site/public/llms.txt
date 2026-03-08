@@ -16,6 +16,7 @@ If you are an agent and need to decide what to do:
 - Agent bootstrap: `npx skilo-cli --json`
 - Share a skill: `skilo share ./my-skill` → returns a link
 - Install a skill: `skilo add skilo.xyz/s/<token>` → downloads, verifies, installs
+- Create a pack: `skilo pack ./reviewer namespace/design-system --name "Starter pack"` → returns a pack link
 - Bulk share: `skilo share claude` → shares all skills from a tool at once
 
 ## Common Inputs
@@ -38,7 +39,7 @@ If you are an agent and need to decide what to do:
 - Roo: `--roo`
 - OpenClaw: `--openclaw`
 
-If no explicit target flag is passed, Skilo defaults to Claude Code unless `SKILO_TARGETS` is set.
+If no explicit target flag is passed, Skilo auto-detects installed tools. If exactly one is found, it installs there. If multiple are found, interactive runs prompt once and non-interactive runs should set `SKILO_TARGETS` or pass explicit flags. If nothing is detected, Skilo falls back to Claude Code.
 
 ## Docs
 

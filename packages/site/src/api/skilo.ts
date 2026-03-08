@@ -15,8 +15,23 @@ export interface SkillMetadata {
   size: number;
   checksum: string;
   listed: boolean;
+  verified: boolean;
+  trust?: {
+    verified: boolean;
+    hasSignature: boolean;
+    visibility: 'public' | 'unlisted';
+  };
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ShareLinkInfo {
+  token: string;
+  expiresAt?: number | null;
+  oneTime: boolean;
+  maxUses?: number | null;
+  usesCount: number;
+  passwordProtected: boolean;
 }
 
 export interface ShareLink {
@@ -35,6 +50,8 @@ export interface PackSkill {
   version: string;
   shareToken: string;
   url: string;
+  verified?: boolean;
+  visibility?: 'public' | 'unlisted';
 }
 
 export interface PackData {
@@ -50,7 +67,7 @@ export const api = {
     return res.json();
   },
 
-  async resolveShare(token: string): Promise<{ skill: SkillMetadata; requiresPassword: boolean }> {
+  async resolveShare(token: string): Promise<{ skill: SkillMetadata; link?: ShareLinkInfo; trust?: SkillMetadata['trust']; requiresPassword: boolean }> {
     const res = await fetch(`${API_BASE}/v1/skills/share/${token}`);
     if (!res.ok) throw new Error('Invalid or expired share link');
     return res.json();
@@ -105,14 +122,13 @@ export const api = {
     throw new Error('SKILL.md not found in tarball');
   },
 
-  async verifySharePassword(token: string, password: string): Promise<SkillMetadata> {
+  async verifySharePassword(token: string, password: string): Promise<{ skill: SkillMetadata; link?: ShareLinkInfo; trust?: SkillMetadata['trust'] }> {
     const res = await fetch(`${API_BASE}/v1/skills/share/${token}/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
     });
     if (!res.ok) throw new Error('Invalid password');
-    const data = await res.json() as { skill: SkillMetadata };
-    return data.skill;
+    return res.json();
   },
 };

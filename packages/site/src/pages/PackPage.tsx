@@ -54,6 +54,20 @@ function PackPage() {
 
   return (
     <main className={MAIN}>
+      {(() => {
+        const verifiedCount = pack.skills.filter((skill) => skill.verified).length;
+        return (
+          <div className="flex flex-wrap gap-1.5">
+            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+              {pack.skills.length} skill{pack.skills.length !== 1 ? "s" : ""}
+            </span>
+            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+              {verifiedCount} verified
+            </span>
+          </div>
+        );
+      })()}
+
       {/* Header info */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
@@ -73,6 +87,12 @@ function PackPage() {
       <div className="mt-4">
         <code className="block overflow-x-auto rounded bg-stone-100 px-3 py-2 font-mono text-[13px] whitespace-nowrap text-stone-700">
           {`npx skilo-cli add https://skilo.xyz/p/${pack.token}`}
+        </code>
+        <p className="mt-2 text-xs text-stone-400">
+          Skilo auto-detects installed tools. Pass <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--cc</code>, <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--codex</code>, <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--cursor</code>, or <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--oc</code> to force a target.
+        </p>
+        <code className="mt-2 block overflow-x-auto rounded bg-stone-50 px-3 py-2 font-mono text-[12px] whitespace-nowrap text-stone-500">
+          {`npx skilo-cli inspect https://skilo.xyz/p/${pack.token}`}
         </code>
       </div>
 
@@ -99,6 +119,14 @@ function PackPage() {
                     {skill.description}
                   </p>
                 )}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
+                    {skill.verified ? "Verified" : "Unsigned"}
+                  </span>
+                  <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
+                    {skill.visibility === "public" ? "Public" : "Unlisted"}
+                  </span>
+                </div>
               </div>
               <span className="shrink-0 text-stone-400 text-sm">&rarr;</span>
             </div>

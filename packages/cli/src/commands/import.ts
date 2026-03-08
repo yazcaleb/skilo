@@ -7,7 +7,15 @@ import * as tar from 'tar';
 import { getClient } from '../api/client.js';
 import { isRegistrySkillRef, normalizeSourceInput } from '../utils/source-kind.js';
 import { findSkillFile } from '../utils/skill-file.js';
-import { type InstallOptions, describeInstallTargets, getInstallDestinations, getInstallDirs } from '../utils/install-targets.js';
+import {
+  type InstallOptions,
+  type InstallTargetResolution,
+  describeInstallTargets,
+  getInstallDestinations,
+  getInstallDirs,
+  getTargetFlag,
+  resolveInstallTargets,
+} from '../utils/install-targets.js';
 import { exitWithError, isJsonOutput, logInfo, logSuccess, printJson, printNote, printUsage } from '../utils/output.js';
 import {
   discoverRepoSkills,
@@ -17,6 +25,49 @@ import {
   selectRepoSkills,
 } from '../utils/repo-skills.js';
 import { parsePackToken } from './share.js';
+
+function classifyImportSource(source: string): 'registry' | 'pack' | 'github' | 'bundle' | 'share' | 'url' | 'local' {
+  if (parsePackToken(source)) return 'pack';
+  if (isGitHubRepoLike(source)) return 'github';
+  if (source.endsWith('.skl')) return 'bundle';
+  if (source.startsWith('https://skilo.xyz/s/')) return 'share';
+  if (source.startsWith('http://') || source.startsWith('https://')) return 'url';
+  if (source.startsWith('.') || source.startsWith('/') || source.startsWith('~')) return 'local';
+  return 'registry';
+}
+
+function emitTargetSelectionNoop(
+  source: string,
+  resolvedType: string,
+  skillCount: number,
+  resolution: InstallTargetResolution
+): void {
+  const nextCommand = resolution.detectedTargets[0]
+    ? `skilo add ${source} ${getTargetFlag(resolution.detectedTargets[0])}`
+    : `skilo add ${source} --cc`;
+
+  if (isJsonOutput()) {
+    printJson({
+      command: 'add',
+      source,
+      resolvedType,
+      skillCount,
+      detectedTargets: resolution.detectedTargets,
+      installedTargets: [],
+      nextCommand,
+      message: resolution.detectedTargets.length > 0
+        ? 'Multiple install targets detected. Pass an explicit target flag or set SKILO_TARGETS.'
+        : 'No install targets selected.',
+    });
+    return;
+  }
+
+  exitWithError(
+    resolution.detectedTargets.length > 0
+      ? `Multiple install targets detected: ${resolution.detectedTargets.join(', ')}. Pass ${resolution.detectedTargets.map(getTargetFlag).join(', ')} or set SKILO_TARGETS.`
+      : 'Install cancelled.'
+  );
+}
 
 export async function importCommand(source: string, options: InstallOptions = {}): Promise<void> {
   if (!source) {
@@ -39,6 +90,7 @@ export async function importCommand(source: string, options: InstallOptions = {}
   try {
     source = normalizeSourceInput(source);
     const prefersRepoSelection = Boolean(options.list || options.all || options.skill?.length);
+    const resolvedType = classifyImportSource(source);
 
     if (await isRegistrySkillRef(source) && !(prefersRepoSelection && isGitHubRepoLike(source))) {
       const { installCommand } = await import('./install.js');
@@ -50,14 +102,26 @@ export async function importCommand(source: string, options: InstallOptions = {}
     const packToken = parsePackToken(source);
 
     if (packToken) {
-      const packResult = await importFromPackLink(packToken, source, options);
+      const installResolution = await resolveInstallTargets(options);
+      if (installResolution.mode === 'needs_target' || (installResolution.mode === 'selected' && installResolution.targets.length === 0)) {
+        const client = await getClient();
+        const pack = await client.resolvePack(packToken);
+        emitTargetSelectionNoop(source, 'pack', pack.skills.length, installResolution);
+        return;
+      }
+
+      const packResult = await importFromPackLink(packToken, options, installResolution);
       logSuccess(`Imported pack ${packResult.name}`);
 
       if (isJsonOutput()) {
         printJson({
-          command: 'import',
+          command: 'add',
           source,
-          mode: 'pack',
+          resolvedType: 'pack',
+          skillCount: packResult.installedSkills.length,
+          detectedTargets: installResolution.detectedTargets,
+          installedTargets: installResolution.targets,
+          nextCommand: `skilo inspect ${source}`,
           pack: {
             token: packResult.token,
             name: packResult.name,
@@ -117,12 +181,20 @@ export async function importCommand(source: string, options: InstallOptions = {}
     }
 
     const selectedRepoSkills = selectRepoSkills(repoSkills, options);
+    const installResolution = await resolveInstallTargets(options);
+
+    const selectedSkillCount = selectedRepoSkills.length > 0 ? selectedRepoSkills.length : 1;
+    if (installResolution.mode === 'needs_target' || (installResolution.mode === 'selected' && installResolution.targets.length === 0)) {
+      emitTargetSelectionNoop(source, resolvedType, selectedSkillCount, installResolution);
+      return;
+    }
+
     const installResults = [];
 
     if (selectedRepoSkills.length > 0) {
       for (const selected of selectedRepoSkills) {
         logInfo(`Installing ${selected.name}${selected.relativeDir === '.' ? '' : ` from ${selected.relativeDir}`}`);
-        installResults.push(await installSkill(selected.path, options));
+        installResults.push(await installSkill(selected.path, options, installResolution));
       }
     } else {
       if (repoSkills.length > 1 && !options.all && !(options.skill?.length)) {
@@ -137,15 +209,20 @@ export async function importCommand(source: string, options: InstallOptions = {}
         );
       }
 
-      installResults.push(await installSkill(skillPath, options));
+      installResults.push(await installSkill(skillPath, options, installResolution));
     }
 
     logSuccess(`Imported from ${source}`);
 
     if (isJsonOutput()) {
       printJson({
-        command: 'import',
+        command: 'add',
         source,
+        resolvedType,
+        skillCount: installResults.length,
+        detectedTargets: installResolution.detectedTargets,
+        installedTargets: installResolution.targets,
+        nextCommand: `skilo inspect ${source}`,
         installedSkills: installResults.map((installResult) => ({
           name: installResult.name,
           targets: installResult.targets,
@@ -180,7 +257,7 @@ async function importFromGitHub(source: string): Promise<{ skillPath: string; cl
   const response = await fetch(tarballUrl, {
     headers: {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'skilo-cli/1.0.12',
+      'User-Agent': 'skilo-cli/1.0.13',
     },
   });
 
@@ -294,8 +371,8 @@ async function importFromShareLink(source: string): Promise<{ skillPath: string;
 
 async function importFromPackLink(
   token: string,
-  source: string,
-  options: InstallOptions = {}
+  options: InstallOptions = {},
+  installResolution: InstallTargetResolution
 ): Promise<{
   token: string;
   name: string;
@@ -321,7 +398,7 @@ async function importFromPackLink(
     const shareSource = `https://skilo.xyz/s/${skill.shareToken}`;
     const imported = await importFromShareLink(shareSource);
     try {
-      const installResult = await installSkill(imported.skillPath, options);
+      const installResult = await installSkill(imported.skillPath, options, installResolution);
       installedSkills.push({
         source: shareSource,
         name: installResult.name,
@@ -391,7 +468,8 @@ async function importFromLocalPath(source: string, allowRepoRoot = false): Promi
 
 async function installSkill(
   skillPath: string,
-  options: InstallOptions = {}
+  options: InstallOptions = {},
+  installResolution: InstallTargetResolution
 ): Promise<{
   name: string;
   targets: Array<{ key: string; label: string; dirs: string[] }>;
@@ -405,8 +483,8 @@ async function installSkill(
   const skillMd = await readFile(join(skillPath, skillFile), 'utf-8');
   const nameMatch = skillMd.match(/#\s*(.+)/);
   const name = nameMatch ? nameMatch[1].trim() : basename(skillPath);
-  const installDirs = getInstallDirs(options);
-  const destinations = getInstallDestinations(options);
+  const installDirs = getInstallDirs(installResolution.targets, options);
+  const destinations = getInstallDestinations(installResolution.targets, options);
   const installedDirs: string[] = [];
 
   for (const skillsDir of installDirs) {
@@ -421,7 +499,15 @@ async function installSkill(
   }
 
   logSuccess('Install complete');
-  printNote('targets', describeInstallTargets(options));
+  if (installResolution.mode === 'detected') {
+    printNote('auto target', describeInstallTargets(installResolution.targets));
+  } else if (installResolution.mode === 'selected') {
+    printNote('selected targets', describeInstallTargets(installResolution.targets));
+  } else if (installResolution.mode === 'default') {
+    printNote('default target', describeInstallTargets(installResolution.targets));
+  } else {
+    printNote('targets', describeInstallTargets(installResolution.targets));
+  }
 
   return {
     name,

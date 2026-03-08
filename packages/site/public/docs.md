@@ -9,6 +9,8 @@ $ npx skilo-cli share ./code-reviewer
 → skilo.xyz/s/a3xK9mP2
 $ skilo add skilo.xyz/s/a3xK9mP2
 ✓ Installed code-reviewer
+$ skilo pack ./code-reviewer flrabbit/original-landing-page-builder --name "Starter pack"
+→ skilo.xyz/p/abc123
 ```
 
 No account required. Skills are published anonymously by default. You can claim them later with `skilo claim`.
@@ -34,7 +36,12 @@ Share all skills from an AI tool at once. Supported tools: `claude`, `codex`, `c
 
 ### `skilo add <skill>`
 
-Install a skill. Accepts a share URL, namespace/name, .skl file, or GitHub URL.
+Install a skill or pack. Accepts a share URL, pack URL, namespace/name, .skl file, GitHub URL, or local path.
+
+- If exactly one supported tool is detected, Skilo installs there automatically.
+- If multiple tools are detected, interactive runs prompt once.
+- Non-interactive runs should pass explicit flags or set `SKILO_TARGETS`.
+- If nothing is detected, Skilo falls back to Claude Code.
 
 ### `skilo publish`
 

@@ -7,7 +7,14 @@ import { createGunzip } from 'node:zlib';
 import { mkdir, rm, unlink } from 'node:fs/promises';
 import * as crypto from 'node:crypto';
 import { isRegistrySkillRef, normalizeSourceInput } from '../utils/source-kind.js';
-import { type InstallOptions, describeInstallTargets, getInstallDirs, getInstallDestinations } from '../utils/install-targets.js';
+import {
+  type InstallOptions,
+  describeInstallTargets,
+  getInstallDestinations,
+  getInstallDirs,
+  getTargetFlag,
+  resolveInstallTargets,
+} from '../utils/install-targets.js';
 import { exitWithError, isJsonOutput, logInfo, logSuccess, printJson, printNote, printUsage } from '../utils/output.js';
 import { isGitHubRepoLike } from '../utils/repo-skills.js';
 
@@ -33,6 +40,37 @@ export async function installCommand(skill: string, options: InstallOptions = {}
       const { importCommand } = await import('./import.js');
       await importCommand(skill, options);
       return;
+    }
+
+    const installResolution = await resolveInstallTargets(options);
+
+    if (installResolution.mode === 'needs_target' || (installResolution.mode === 'selected' && installResolution.targets.length === 0)) {
+      const detectedTargets = installResolution.detectedTargets;
+      const nextCommand = detectedTargets[0]
+        ? `skilo add ${skill} ${getTargetFlag(detectedTargets[0])}`
+        : `skilo add ${skill} --cc`;
+
+      if (isJsonOutput()) {
+        printJson({
+          command: 'add',
+          source: skill,
+          resolvedType: 'registry',
+          skillCount: 0,
+          detectedTargets,
+          installedTargets: [],
+          nextCommand,
+          message: detectedTargets.length > 0
+            ? 'Multiple install targets detected. Pass an explicit target flag or set SKILO_TARGETS.'
+            : 'No install targets selected.',
+        });
+        return;
+      }
+
+      exitWithError(
+        detectedTargets.length > 0
+          ? `Multiple install targets detected: ${detectedTargets.join(', ')}. Pass ${detectedTargets.map(getTargetFlag).join(', ')} or set SKILO_TARGETS.`
+          : 'Install cancelled.'
+      );
     }
 
     const { namespace, name, version } = parseSkillRef(skill);
@@ -67,8 +105,8 @@ export async function installCommand(skill: string, options: InstallOptions = {}
       printNote('checksum', 'verified');
     }
 
-    const installDirs = getInstallDirs(options);
-    const destinations = getInstallDestinations(options);
+    const installDirs = getInstallDirs(installResolution.targets, options);
+    const destinations = getInstallDestinations(installResolution.targets, options);
     const installedDirs: string[] = [];
 
     for (const skillsDir of installDirs) {
@@ -93,15 +131,29 @@ export async function installCommand(skill: string, options: InstallOptions = {}
     }
 
     logSuccess(`Installed ${namespace}/${name}@${versionToInstall}`);
-    printNote('targets', describeInstallTargets(options));
+    if (installResolution.mode === 'detected') {
+      printNote('auto target', describeInstallTargets(installResolution.targets));
+    } else if (installResolution.mode === 'selected') {
+      printNote('selected targets', describeInstallTargets(installResolution.targets));
+    } else if (installResolution.mode === 'default') {
+      printNote('default target', describeInstallTargets(installResolution.targets));
+    } else {
+      printNote('targets', describeInstallTargets(installResolution.targets));
+    }
 
     if (isJsonOutput()) {
       printJson({
-        command: 'install',
+        command: 'add',
         source: skill,
+        resolvedType: 'registry',
+        skillCount: 1,
+        detectedTargets: installResolution.detectedTargets,
+        installedTargets: installResolution.targets,
+        nextCommand: `skilo inspect ${skill}`,
         skill: `${namespace}/${name}`,
         version: versionToInstall,
         checksumVerified: Boolean(expectedChecksum),
+        targetMode: installResolution.mode,
         targets: destinations.map((destination) => ({
           key: destination.key,
           label: destination.label,
