@@ -38,6 +38,8 @@ npm install -g skilo-cli
 npx skilo-cli <command>
 ```
 
+The first successful interactive `npx skilo-cli ...` run also attempts `npm install -g skilo-cli` automatically so the `skilo` binary is available afterward. Set `SKILO_NO_AUTO_INSTALL=1` to disable that bootstrap step.
+
 ### Share a skill
 
 ```bash

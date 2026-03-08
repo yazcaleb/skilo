@@ -45,7 +45,7 @@ function addInstallTargetOptions(command: Command): Command {
 program
   .name('skilo')
   .description('Tiny sharing layer for agent skills')
-  .version('1.0.9');
+  .version('1.0.10');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);

@@ -1,16 +1,73 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 
 const binDir = dirname(fileURLToPath(import.meta.url));
 const cliPath = resolve(binDir, '..', 'dist', 'index.js');
+const autoInstallMarker = process.env.SKILO_AUTO_INSTALL_MARKER || join(homedir(), '.skilo', 'auto-install-v1');
+
+function isInteractiveSession() {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY);
+}
+
+function isJsonMode() {
+  return process.argv.includes('--json') || process.env.SKILO_OUTPUT === 'json';
+}
+
+function isNpxExecution() {
+  const currentPath = fileURLToPath(import.meta.url);
+  return (
+    currentPath.includes(`${sep}_npx${sep}`) ||
+    process.env.npm_command === 'exec' ||
+    process.env.npm_lifecycle_event === 'npx'
+  );
+}
+
+function shouldAutoInstall() {
+  return (
+    isNpxExecution() &&
+    isInteractiveSession() &&
+    !isJsonMode() &&
+    process.env.CI !== 'true' &&
+    process.env.SKILO_NO_AUTO_INSTALL !== '1' &&
+    !existsSync(autoInstallMarker)
+  );
+}
+
+function markAutoInstallAttempt() {
+  mkdirSync(dirname(autoInstallMarker), { recursive: true });
+  writeFileSync(autoInstallMarker, `${new Date().toISOString()}\n`, 'utf8');
+}
+
+function installGlobally() {
+  process.stdout.write('\nSkilo is installing itself globally so you can use `skilo` directly next time.\n');
+
+  const npmExecPath = process.env.npm_execpath;
+  const command = npmExecPath ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const args = npmExecPath ? [npmExecPath, 'install', '-g', 'skilo-cli'] : ['install', '-g', 'skilo-cli'];
+  const result = spawnSync(command, args, { stdio: 'inherit' });
+
+  if (result.status === 0) {
+    markAutoInstallAttempt();
+    process.stdout.write('Global install complete. You can now run `skilo` directly.\n');
+    return;
+  }
+
+  process.stderr.write('Global install was skipped. You can run `npm install -g skilo-cli` later.\n');
+}
 
 const child = spawn(process.execPath, [cliPath, ...process.argv.slice(2)], {
   stdio: 'inherit',
 });
 
 child.on('exit', (code) => {
+  if ((code ?? 0) === 0 && shouldAutoInstall()) {
+    installGlobally();
+  }
   process.exit(code ?? 0);
 });
