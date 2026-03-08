@@ -6,6 +6,7 @@
 
 ### Changed
 
+- Wire pack subset API to selection UI (`56b18da`)
 - Bump body text contrast from stone-500 to stone-600 (`f2c68b2`)
 - Redesign skill and pack pages (`40eb931`)
 - Auto-refresh the Skilo CLI bootstrap (`0ec39ce`)
