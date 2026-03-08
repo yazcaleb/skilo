@@ -51,7 +51,7 @@ function addInstallTargetOptions(command: Command): Command {
 program
   .name('skilo')
   .description('Share agent skills with a link. No repo required.')
-  .version('1.0.26');
+  .version('1.0.27');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);

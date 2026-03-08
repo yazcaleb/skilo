@@ -24,6 +24,7 @@ export interface VersionMetadata {
   audit: AuditResult;
   publisherStatus: PublisherStatus;
   sourceType: SourceType;
+  auditVersion: number;
   scannedAt: number | null;
 }
 
@@ -54,6 +55,8 @@ interface ParsedBundle {
   skillFile: ParsedTarEntry | null;
   packageJson: ParsedTarEntry | null;
 }
+
+export const CURRENT_AUDIT_VERSION = 2;
 
 function parseFrontMatter(content: string): { data: Record<string, unknown>; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -95,26 +98,29 @@ function parseSkillManifest(content: string): {
   };
 }
 
-function collectCapabilities(skillContent: string, bundleEntries: ParsedTarEntry[], packageJsonContent: string | null): string[] {
+function collectCapabilities(analysisText: string, bundleEntries: ParsedTarEntry[], packageJsonContent: string | null): string[] {
   const capabilities = new Set<string>();
-  const lower = skillContent.toLowerCase();
+  const lower = analysisText.toLowerCase();
 
-  if (/\b(curl|wget|bash|sh |zsh |powershell|invoke-webrequest|npm |pnpm |yarn )/i.test(skillContent)) {
+  if (/\b(curl|wget|bash|sh |zsh |powershell|invoke-webrequest|npm |pnpm |yarn |bun )/i.test(analysisText)) {
     capabilities.add('shell');
   }
-  if (/\b(fetch|http|https|api|request|webhook|download|upload)\b/i.test(skillContent)) {
+  if (/\b(fetch|http|https|api|request|webhook|download|upload|axios|sendbeacon|xmlhttprequest)\b/i.test(analysisText)) {
     capabilities.add('network');
   }
-  if (/\b(write|edit|modify|delete|rename|move|create).*(file|folder|directory|path)\b/i.test(skillContent)) {
+  if (
+    /\b(write|edit|modify|delete|rename|move|create).*(file|folder|directory|path)\b/i.test(analysisText)
+    || /\b(readFile|readFileSync|createReadStream|openSync|fs\.)\b/i.test(analysisText)
+  ) {
     capabilities.add('filesystem');
   }
-  if (/\b(git|github|pull request|commit|branch|checkout|rebase|merge)\b/i.test(skillContent)) {
+  if (/\b(git|github|pull request|commit|branch|checkout|rebase|merge)\b/i.test(analysisText)) {
     capabilities.add('git');
   }
-  if (/\b(playwright|puppeteer|browser|chrome|selenium|cdp)\b/i.test(skillContent)) {
+  if (/\b(playwright|puppeteer|browser|chrome|selenium|cdp)\b/i.test(analysisText)) {
     capabilities.add('browser');
   }
-  if (/\b(api key|token|password|secret|credential)\b/i.test(lower)) {
+  if (/\b(api key|token|password|secret|credential|process\.env|deno\.env|dotenv|\.env\b)\b/i.test(lower)) {
     capabilities.add('secrets');
   }
   if (packageJsonContent) {
@@ -136,7 +142,28 @@ function collectCapabilities(skillContent: string, bundleEntries: ParsedTarEntry
 
 function buildAudit(skillContent: string, bundleEntries: ParsedTarEntry[], packageJsonContent: string | null): AuditResult {
   const findings: AuditFinding[] = [];
-  const links = [...skillContent.matchAll(/\bhttps?:\/\/[^\s)>\]]+/gi)].map((match) => match[0]);
+  const analysisText = bundleEntries.length > 0
+    ? bundleEntries.map((entry) => `# ${entry.name}\n${entry.content}`).join('\n\n')
+    : skillContent;
+  const links = [...analysisText.matchAll(/\bhttps?:\/\/[^\s)>\]]+/gi)].map((match) => match[0]);
+
+  const addFinding = (finding: AuditFinding) => {
+    if (findings.some((existing) => existing.code === finding.code && existing.message === finding.message)) {
+      return;
+    }
+    findings.push(finding);
+  };
+
+  const networkWritePattern = /\b(fetch\s*\(|axios\.(?:post|put|patch|request)\s*\(|new\s+XMLHttpRequest|sendBeacon\s*\(|curl\s+https?:\/\/|wget\s+https?:\/\/|invoke-webrequest\b|webhook\b)/i;
+  const envAccessPattern = /\b(process\.env\b|Deno\.env\b|os\.environ\b|getenv\s*\(|dotenv\.config\s*\(|load_dotenv\b)\b/i;
+  const sensitiveReadPattern = /\b(?:readFileSync|readFile|createReadStream|openSync|cat|type|Get-Content|fs\.(?:readFile|readFileSync|createReadStream))\b[\s\S]{0,160}(\/etc\/passwd|\/proc\/self\/environ|\/var\/run\/secrets\b|\.npmrc\b|\.netrc\b|docker\/config\.json\b|aws\/credentials\b|\.ssh\/|id_rsa(?:\.pub)?\b|\.env(?:\.[A-Za-z0-9._-]+)?\b)/i;
+  const directEnvPayloadPattern = /\b(?:body|data|payload)\s*:\s*JSON\.stringify\(\s*(?:process\.env|Deno\.env(?:\.toObject\(\))?)\s*\)/i;
+  const explicitSecretsTheftPattern = /\b(steal|exfiltrat|harvest|leak|dump)\b[\s\S]{0,120}\b(api key|token|secret|credential|password|cookies?|session|environment|keys?)\b/i;
+
+  const envAliases = [...analysisText.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*process\.env\b/g)].map((match) => match[1]);
+  const sensitiveFileAliases = [...analysisText.matchAll(
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;\n]*(?:readFileSync|readFile|createReadStream)[^;\n]*(\/etc\/passwd|\/proc\/self\/environ|\/var\/run\/secrets\b|\.npmrc\b|\.netrc\b|docker\/config\.json\b|aws\/credentials\b|\.ssh\/|id_rsa(?:\.pub)?\b|\.env(?:\.[A-Za-z0-9._-]+)?\b)/gi
+  )].map((match) => match[1]);
 
   const blockedRules: Array<{ code: string; regex: RegExp; message: string }> = [
     {
@@ -154,6 +181,11 @@ function buildAudit(skillContent: string, bundleEntries: ParsedTarEntry[], packa
       regex: /(<script\b|onerror=|onload=|javascript:)/i,
       message: 'Raw scriptable HTML or JavaScript content detected.',
     },
+    {
+      code: 'malicious-intent',
+      regex: explicitSecretsTheftPattern,
+      message: 'Malicious exfiltration intent was detected in the skill instructions or code.',
+    },
   ];
 
   const warningRules: Array<{ code: string; regex: RegExp; message: string }> = [
@@ -170,14 +202,66 @@ function buildAudit(skillContent: string, bundleEntries: ParsedTarEntry[], packa
   ];
 
   for (const rule of blockedRules) {
-    if (rule.regex.test(skillContent)) {
-      findings.push({ code: rule.code, severity: 'blocked', message: rule.message });
+    if (rule.regex.test(analysisText)) {
+      addFinding({ code: rule.code, severity: 'blocked', message: rule.message });
     }
   }
 
   for (const rule of warningRules) {
-    if (rule.regex.test(skillContent)) {
-      findings.push({ code: rule.code, severity: 'warning', message: rule.message });
+    if (rule.regex.test(analysisText)) {
+      addFinding({ code: rule.code, severity: 'warning', message: rule.message });
+    }
+  }
+
+  if (envAccessPattern.test(analysisText)) {
+    addFinding({
+      code: 'environment-access',
+      severity: 'warning',
+      message: 'Environment variable or secret-store access is referenced in the bundle.',
+    });
+  }
+
+  if (sensitiveReadPattern.test(analysisText)) {
+    addFinding({
+      code: 'sensitive-file-read',
+      severity: 'blocked',
+      message: 'Sensitive local files such as .env, SSH keys, or system credential paths are being read.',
+    });
+  }
+
+  if (networkWritePattern.test(analysisText) && directEnvPayloadPattern.test(analysisText)) {
+    addFinding({
+      code: 'env-exfiltration',
+      severity: 'blocked',
+      message: 'Environment variables are being serialized into an outbound network request.',
+    });
+  }
+
+  for (const alias of envAliases) {
+    const aliasPayloadPattern = new RegExp(
+      `\\b(?:body|data|payload)\\s*:\\s*(?:JSON\\.stringify\\(\\s*)?${alias}\\b|\\bJSON\\.stringify\\(\\s*${alias}\\s*\\)`,
+      'i'
+    );
+    if (networkWritePattern.test(analysisText) && aliasPayloadPattern.test(analysisText)) {
+      addFinding({
+        code: 'env-exfiltration-alias',
+        severity: 'blocked',
+        message: 'Environment-derived data is being sent in an outbound network request.',
+      });
+    }
+  }
+
+  for (const alias of sensitiveFileAliases) {
+    const aliasPayloadPattern = new RegExp(
+      `\\b(?:body|data|payload)\\s*:\\s*(?:JSON\\.stringify\\(\\s*)?${alias}\\b|\\bJSON\\.stringify\\(\\s*${alias}\\s*\\)`,
+      'i'
+    );
+    if (networkWritePattern.test(analysisText) && aliasPayloadPattern.test(analysisText)) {
+      addFinding({
+        code: 'sensitive-file-exfiltration',
+        severity: 'blocked',
+        message: 'Sensitive local file contents are being prepared for outbound transmission.',
+      });
     }
   }
 
@@ -185,14 +269,14 @@ function buildAudit(skillContent: string, bundleEntries: ParsedTarEntry[], packa
     try {
       const pkg = JSON.parse(packageJsonContent) as { scripts?: Record<string, string> };
       if (pkg.scripts && Object.keys(pkg.scripts).length > 0) {
-        findings.push({
+        addFinding({
           code: 'package-scripts',
           severity: 'warning',
           message: 'package.json scripts are present in the bundle.',
         });
       }
     } catch {
-      findings.push({
+      addFinding({
         code: 'package-json-invalid',
         severity: 'warning',
         message: 'package.json is present but could not be parsed.',
@@ -201,7 +285,7 @@ function buildAudit(skillContent: string, bundleEntries: ParsedTarEntry[], packa
   }
 
   if (bundleEntries.some((entry) => /(^|\/)(index|install|setup|run)\.(sh|bash|zsh|command)$/i.test(entry.name))) {
-    findings.push({
+    addFinding({
       code: 'executable-script',
       severity: 'warning',
       message: 'Executable shell scripts are included in the bundle.',
@@ -236,9 +320,10 @@ function buildAudit(skillContent: string, bundleEntries: ParsedTarEntry[], packa
   return {
     status,
     findings,
-    capabilities: collectCapabilities(skillContent, bundleEntries, packageJsonContent),
+    capabilities: collectCapabilities(analysisText, bundleEntries, packageJsonContent),
     riskSummary: findings
       .filter((finding) => finding.severity !== 'info')
+      .sort((a, b) => (a.severity === 'blocked' ? -1 : 1) - (b.severity === 'blocked' ? -1 : 1))
       .slice(0, 3)
       .map((finding) => finding.message),
   };
@@ -309,6 +394,7 @@ export async function analyzeSkillTarball(
     audit: buildAudit(skillContent, parsed.entries, parsed.packageJson?.content || null),
     publisherStatus,
     sourceType,
+    auditVersion: CURRENT_AUDIT_VERSION,
     scannedAt: Date.now(),
   };
 }
@@ -323,6 +409,7 @@ export function parseVersionMetadata(raw: unknown): VersionMetadata {
       audit: { status: 'clean', findings: [], capabilities: [], riskSummary: [] },
       publisherStatus: 'anonymous',
       sourceType: 'registry',
+      auditVersion: 0,
       scannedAt: null,
     };
   }
@@ -377,6 +464,7 @@ export function parseVersionMetadata(raw: unknown): VersionMetadata {
         || parsed.sourceType === 'derived_pack'
         ? parsed.sourceType
         : 'registry',
+      auditVersion: typeof parsed.auditVersion === 'number' ? parsed.auditVersion : 0,
       scannedAt: typeof parsed.scannedAt === 'number' ? parsed.scannedAt : null,
     };
   } catch {
@@ -388,9 +476,14 @@ export function parseVersionMetadata(raw: unknown): VersionMetadata {
       audit: { status: 'clean', findings: [], capabilities: [], riskSummary: [] },
       publisherStatus: 'anonymous',
       sourceType: 'registry',
+      auditVersion: 0,
       scannedAt: null,
     };
   }
+}
+
+export function needsAuditRefresh(raw: unknown): boolean {
+  return parseVersionMetadata(raw).auditVersion < CURRENT_AUDIT_VERSION;
 }
 
 export function buildTrustInfo(input: {

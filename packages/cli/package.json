@@ -1,6 +1,6 @@
 {
   "name": "skilo-cli",
-  "version": "1.0.26",
+  "version": "1.0.27",
   "description": "Share agent skills with a link and install SKILL.md artifacts across AI coding tools",
   "type": "module",
   "main": "dist/index.js",

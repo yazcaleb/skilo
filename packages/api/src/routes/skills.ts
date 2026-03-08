@@ -5,6 +5,7 @@ import {
   analyzeSkillTarball,
   buildTrustInfo,
   extractSkillContentFromTarball,
+  needsAuditRefresh,
   parseVersionMetadata,
   type PublisherStatus,
 } from '../utils/trust.js';
@@ -31,6 +32,7 @@ type SkillVersionRow = {
 };
 type ShareRow = {
   id: string;
+  skill_id: string;
   token: string;
   one_time: number;
   expires_at: number | null;
@@ -86,6 +88,46 @@ async function getShareRecord(db: D1Database, token: string): Promise<ShareRow |
      WHERE sl.token = ?`
   );
   return shareStmt.bind(token).first<ShareRow>();
+}
+
+async function refreshStoredMetadataIfNeeded(
+  env: Env,
+  input: {
+    skillId: string;
+    version: string;
+    tarballUrl: string | null;
+    metadataJson: string | null;
+    signature: string | null;
+    sourceType: 'registry' | 'share';
+  }
+): Promise<string | null> {
+  if (!input.tarballUrl || !needsAuditRefresh(input.metadataJson)) {
+    return input.metadataJson;
+  }
+
+  const object = await env.SKILLPACK_BUCKET.get(input.tarballUrl);
+  if (!object) {
+    return input.metadataJson;
+  }
+
+  const existing = parseVersionMetadata(input.metadataJson);
+  const publisherStatus: PublisherStatus = existing.publisherStatus === 'verified' || existing.publisherStatus === 'claimed'
+    ? existing.publisherStatus
+    : input.signature
+      ? 'claimed'
+      : 'anonymous';
+  const refreshed = await analyzeSkillTarball(
+    new Uint8Array(await object.arrayBuffer()),
+    publisherStatus,
+    input.sourceType
+  );
+  const refreshedJson = JSON.stringify(refreshed);
+
+  await env.DB.prepare(
+    `UPDATE skill_versions SET metadata_json = ? WHERE skill_id = ? AND version = ?`
+  ).bind(refreshedJson, input.skillId, input.version).run();
+
+  return refreshedJson;
 }
 
 function buildSharePayload(share: ShareRow) {
@@ -415,6 +457,15 @@ skillsRouter.get('/share/:token', rateLimiters.resolveShare, async (c) => {
       });
     }
 
+    share.metadata_json = await refreshStoredMetadataIfNeeded(c.env, {
+      skillId: share.skill_id,
+      version: share.latest_version,
+      tarballUrl: share.tarball_url,
+      metadataJson: share.metadata_json,
+      signature: share.signature,
+      sourceType: 'share',
+    });
+
     return c.json({
       ...buildSharePayload(share),
       requiresPassword: false,
@@ -447,6 +498,15 @@ skillsRouter.post('/share/:token/verify', async (c) => {
       return accessError;
     }
 
+    share.metadata_json = await refreshStoredMetadataIfNeeded(c.env, {
+      skillId: share.skill_id,
+      version: share.latest_version,
+      tarballUrl: share.tarball_url,
+      metadataJson: share.metadata_json,
+      signature: share.signature,
+      sourceType: 'share',
+    });
+
     return c.json(buildSharePayload(share));
   } catch (e) {
     console.error('Password verify error:', e);
@@ -467,6 +527,15 @@ skillsRouter.get('/share/:token/content', rateLimiters.resolveShare, async (c) =
     if (accessError) {
       return accessError;
     }
+
+    share.metadata_json = await refreshStoredMetadataIfNeeded(c.env, {
+      skillId: share.skill_id,
+      version: share.latest_version,
+      tarballUrl: share.tarball_url,
+      metadataJson: share.metadata_json,
+      signature: share.signature,
+      sourceType: 'share',
+    });
 
     const object = await c.env.SKILLPACK_BUCKET.get(share.tarball_url || '');
     if (!object) {
@@ -502,6 +571,32 @@ skillsRouter.get('/share/:token/tarball', rateLimiters.resolveShare, async (c) =
     const accessError = await ensureShareAccess(share, getSharePassword(c));
     if (accessError) {
       return accessError;
+    }
+
+    share.metadata_json = await refreshStoredMetadataIfNeeded(c.env, {
+      skillId: share.skill_id,
+      version: share.latest_version,
+      tarballUrl: share.tarball_url,
+      metadataJson: share.metadata_json,
+      signature: share.signature,
+      sourceType: 'share',
+    });
+    const refreshedTrust = buildTrustInfo({
+      signature: share.signature,
+      privacy: share.privacy,
+      checksum: share.checksumsha256,
+      metadataJson: share.metadata_json,
+      sourceType: 'share',
+    });
+    if (refreshedTrust.auditStatus === 'blocked') {
+      return c.json(
+        {
+          error: 'audit_blocked',
+          message: refreshedTrust.riskSummary[0] || 'Share link install blocked by security audit',
+          trust: refreshedTrust,
+        },
+        403
+      );
     }
 
     const object = await c.env.SKILLPACK_BUCKET.get(share.tarball_url || '');
@@ -552,12 +647,20 @@ skillsRouter.get('/:namespace/:name', async (c) => {
        LIMIT 1`
     );
     const version = await versionStmt.bind(result.id, result.version).first<SkillVersionRow>();
-    const metadata = parseVersionMetadata(version?.metadata_json);
+    const metadataJson = await refreshStoredMetadataIfNeeded(c.env, {
+      skillId: result.id,
+      version: result.version,
+      tarballUrl: version?.tarball_url || null,
+      metadataJson: version?.metadata_json || null,
+      signature: version?.signature || null,
+      sourceType: 'registry',
+    });
+    const metadata = parseVersionMetadata(metadataJson);
     const trust = buildTrustInfo({
       signature: version?.signature,
       privacy: result.privacy,
       checksum: version?.checksumsha256,
-      metadataJson: version?.metadata_json,
+      metadataJson,
     });
 
     return c.json({
@@ -591,9 +694,9 @@ skillsRouter.get('/:namespace/:name/versions', async (c) => {
 
   try {
     const skillStmt = await c.env.DB.prepare(
-      `SELECT id FROM skills WHERE namespace = ? AND name = ?`
+      `SELECT id, privacy FROM skills WHERE namespace = ? AND name = ?`
     );
-    const skill = await skillStmt.bind(namespace, name).first<SkillIdRow>();
+    const skill = await skillStmt.bind(namespace, name).first<{ id: string; privacy: string }>();
 
     if (!skill) {
       return c.json({ error: 'not_found', message: 'Skill not found' }, 404);
@@ -630,13 +733,45 @@ skillsRouter.get('/:namespace/:name/tarball/:version', async (c) => {
     }
 
     const versionStmt = await c.env.DB.prepare(
-      `SELECT tarball_url, size FROM skill_versions
+      `SELECT tarball_url, size, metadata_json, signature, checksumsha256 FROM skill_versions
        WHERE skill_id = ? AND version = ?`
     );
-    const versionData = await versionStmt.bind(skill.id, version).first<{ tarball_url: string; size: number }>();
+    const versionData = await versionStmt.bind(skill.id, version).first<{
+      tarball_url: string;
+      size: number;
+      metadata_json: string | null;
+      signature: string | null;
+      checksumsha256: string | null;
+    }>();
 
     if (!versionData) {
       return c.json({ error: 'not_found', message: 'Version not found' }, 404);
+    }
+
+    const metadataJson = await refreshStoredMetadataIfNeeded(c.env, {
+      skillId: skill.id,
+      version,
+      tarballUrl: versionData.tarball_url,
+      metadataJson: versionData.metadata_json,
+      signature: versionData.signature,
+      sourceType: 'registry',
+    });
+    const trust = buildTrustInfo({
+      signature: versionData.signature,
+      privacy: skill.privacy,
+      checksum: versionData.checksumsha256,
+      metadataJson,
+      sourceType: 'registry',
+    });
+    if (trust.auditStatus === 'blocked') {
+      return c.json(
+        {
+          error: 'audit_blocked',
+          message: trust.riskSummary[0] || 'Skill download blocked by security audit',
+          trust,
+        },
+        403
+      );
     }
 
     const object = await c.env.SKILLPACK_BUCKET.get(versionData.tarball_url);

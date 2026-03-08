@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../index.js';
 import { rateLimiters } from '../middleware/rateLimit.js';
-import { aggregatePackTrust, buildTrustInfo } from '../utils/trust.js';
+import { aggregatePackTrust, analyzeSkillTarball, buildTrustInfo, needsAuditRefresh, parseVersionMetadata, type PublisherStatus } from '../utils/trust.js';
 import { resolveCatalogEntry } from '../utils/catalog.js';
 
 export const packsRouter = new Hono<{ Bindings: Env }>();
@@ -23,6 +23,7 @@ interface PackRow {
 }
 
 interface PackItemRow {
+  skillId: string;
   shareLinkId: string;
   shareToken: string;
   namespace: string;
@@ -34,6 +35,7 @@ interface PackItemRow {
   checksum: string | null;
   signature: string | null;
   metadataJson: string | null;
+  tarballUrl: string | null;
   position: number;
 }
 
@@ -64,6 +66,7 @@ async function getPackByToken(db: D1Database, token: string): Promise<PackRow | 
 async function getPackItems(db: D1Database, packId: string): Promise<PackItemRow[]> {
   const items = await db.prepare(
     `SELECT pi.position,
+            s.id as skillId,
             sl.id as shareLinkId,
             sl.token as shareToken,
             s.namespace,
@@ -73,6 +76,7 @@ async function getPackItems(db: D1Database, packId: string): Promise<PackItemRow
             sv.checksumsha256,
             sv.signature,
             sv.metadata_json,
+            sv.tarball_url,
             s.privacy
      FROM pack_items pi
      JOIN share_links sl ON pi.share_link_id = sl.id
@@ -83,6 +87,7 @@ async function getPackItems(db: D1Database, packId: string): Promise<PackItemRow
   ).bind(packId).all();
 
   return (items.results || []).map((row: any) => ({
+    skillId: row.skillId,
     shareLinkId: row.shareLinkId,
     shareToken: row.shareToken,
     namespace: row.namespace,
@@ -94,8 +99,39 @@ async function getPackItems(db: D1Database, packId: string): Promise<PackItemRow
     checksum: row.checksumsha256,
     signature: row.signature,
     metadataJson: row.metadata_json,
+    tarballUrl: row.tarball_url,
     position: row.position,
   }));
+}
+
+async function refreshPackItemMetadataIfNeeded(env: Env, item: PackItemRow): Promise<PackItemRow> {
+  if (!item.tarballUrl || !needsAuditRefresh(item.metadataJson)) {
+    return item;
+  }
+
+  const object = await env.SKILLPACK_BUCKET.get(item.tarballUrl);
+  if (!object) {
+    return item;
+  }
+
+  const existing = parseVersionMetadata(item.metadataJson);
+  const publisherStatus: PublisherStatus = existing.publisherStatus === 'verified' || existing.publisherStatus === 'claimed'
+    ? existing.publisherStatus
+    : item.signature
+      ? 'claimed'
+      : 'anonymous';
+  const refreshed = await analyzeSkillTarball(
+    new Uint8Array(await object.arrayBuffer()),
+    publisherStatus,
+    'share'
+  );
+  const refreshedJson = JSON.stringify(refreshed);
+
+  await env.DB.prepare(
+    `UPDATE skill_versions SET metadata_json = ? WHERE skill_id = ? AND version = ?`
+  ).bind(refreshedJson, item.skillId, item.version).run();
+
+  return { ...item, metadataJson: refreshedJson };
 }
 
 async function packTokenMatches(
@@ -260,7 +296,9 @@ packsRouter.post('/subset', rateLimiters.createPack, async (c) => {
       return c.json({ error: 'not_found', message: 'Source pack not found' }, 404);
     }
 
-    const sourceItems = await getPackItems(c.env.DB, sourcePack.id);
+    const sourceItems = await Promise.all(
+      (await getPackItems(c.env.DB, sourcePack.id)).map((item) => refreshPackItemMetadataIfNeeded(c.env, item))
+    );
     if (sourceItems.length === 0) {
       return c.json({ error: 'not_found', message: 'Source pack is empty' }, 404);
     }
@@ -477,7 +515,9 @@ packsRouter.get('/:token', rateLimiters.resolveShare, async (c) => {
       return c.json({ error: 'not_found', message: 'Pack not found' }, 404);
     }
 
-    const items = await getPackItems(c.env.DB, pack.id);
+    const items = await Promise.all(
+      (await getPackItems(c.env.DB, pack.id)).map((item) => refreshPackItemMetadataIfNeeded(c.env, item))
+    );
     const skills = items.map((row) => {
       const trust = buildTrustInfo({
         signature: row.signature,
