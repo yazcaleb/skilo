@@ -10,11 +10,49 @@ const STATIC_MARKDOWN = {
 
 const LLM_BOTS =
   /GPTBot|ChatGPT-User|Claude-Web|ClaudeBot|Anthropic|PerplexityBot|Google-Extended|CCBot|cohere-ai|Bytespider|Amazonbot|FacebookBot|Meta-ExternalAgent|AI2Bot|Applebot-Extended|Diffbot|YouBot|Sidetrade|PetalBot/i;
+const BROWSER_UA =
+  /Mozilla|Chrome|Safari|Firefox|Edg|OPR|Arc|Brave|SamsungBrowser|DuckDuckGo/i;
+
+function looksLikeBrowserNavigation(request, accept, ua) {
+  if (BROWSER_UA.test(ua)) {
+    return true;
+  }
+
+  const secFetchDest = request.headers.get('sec-fetch-dest') || '';
+  const secFetchMode = request.headers.get('sec-fetch-mode') || '';
+  const upgrade = request.headers.get('upgrade-insecure-requests') || '';
+
+  return (
+    secFetchDest === 'document' ||
+    secFetchMode === 'navigate' ||
+    upgrade === '1' ||
+    accept.includes('text/html')
+  );
+}
 
 function shouldServeMarkdown(request) {
   const accept = request.headers.get('accept') || '';
   const ua = request.headers.get('user-agent') || '';
-  return accept.includes('text/markdown') || LLM_BOTS.test(ua);
+
+  if (accept.includes('text/markdown') || accept.includes('text/plain')) {
+    return true;
+  }
+
+  if (request.headers.get('x-skilo-agent') === '1') {
+    return true;
+  }
+
+  if (LLM_BOTS.test(ua)) {
+    return true;
+  }
+
+  if (looksLikeBrowserNavigation(request, accept, ua)) {
+    return false;
+  }
+
+  // Generic fetch clients, curl, server-side agents, and tool runners
+  // should get the markdown view at the root instead of the human SPA shell.
+  return true;
 }
 
 function md(body, maxAge = 3600) {
@@ -23,6 +61,7 @@ function md(body, maxAge = 3600) {
       'Content-Type': 'text/markdown; charset=utf-8',
       'Cache-Control': `public, max-age=${maxAge}`,
       'X-Content-Format': 'markdown',
+      'Vary': 'Accept, User-Agent, Sec-Fetch-Dest, Sec-Fetch-Mode, X-Skilo-Agent',
     },
   });
 }
