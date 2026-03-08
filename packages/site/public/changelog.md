@@ -4,6 +4,12 @@
 
 ## 2026-03-08
 
+### Removed
+
+- Remove the workspace React type override (`bbab195`)
+- Remove llms.txt badge from landing page (`55fefe6`)
+- Remove dot separator from anon names (ancat not an.cat) (`2003234`)
+
 ### Added
 
 - Add live stats to the landing page (`f1982ad`)
@@ -66,11 +72,6 @@
 - Fix share flow end to end (`459c3de`)
 - Fix npm package metadata for CLI publish (`75b695f`)
 - Fix CLI share launcher and local skill support (`8adf6c0`)
-
-### Removed
-
-- Remove llms.txt badge from landing page (`55fefe6`)
-- Remove dot separator from anon names (ancat not an.cat) (`2003234`)
 
 ## 2026-03-07
 

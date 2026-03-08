@@ -1,6 +1,12 @@
 import { Hono } from 'hono';
 import type { Env } from '../index.js';
 import { rateLimiters } from '../middleware/rateLimit.js';
+import {
+  analyzeSkillTarball,
+  buildTrustInfo,
+  parseVersionMetadata,
+  type PublisherStatus,
+} from '../utils/trust.js';
 
 export const skillsRouter = new Hono<{ Bindings: Env }>();
 
@@ -47,41 +53,8 @@ function isPublicSkill(privacy: unknown): boolean {
   return privacy === 'public';
 }
 
-function parseVersionMetadata(raw: unknown): {
-  author: string | null;
-  homepage: string | null;
-  repository: string | null;
-  keywords: string[];
-} {
-  if (typeof raw !== 'string' || raw.trim() === '') {
-    return { author: null, homepage: null, repository: null, keywords: [] };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return {
-      author: typeof parsed.author === 'string' ? parsed.author : null,
-      homepage: typeof parsed.homepage === 'string' ? parsed.homepage : null,
-      repository: typeof parsed.repository === 'string' ? parsed.repository : null,
-      keywords: Array.isArray(parsed.keywords)
-        ? parsed.keywords.filter((value): value is string => typeof value === 'string')
-        : [],
-    };
-  } catch {
-    return { author: null, homepage: null, repository: null, keywords: [] };
-  }
-}
-
 function buildTarballUrl(namespace: string, name: string, version: string): string {
   return `/v1/skills/${namespace}/${name}/tarball/${version}`;
-}
-
-function buildTrustInfo(signature: unknown, privacy: unknown) {
-  return {
-    verified: typeof signature === 'string' && signature.length > 0,
-    hasSignature: typeof signature === 'string' && signature.length > 0,
-    visibility: isPublicSkill(privacy) ? 'public' : 'unlisted',
-  };
 }
 
 // List/search skills - only public skills
@@ -148,9 +121,27 @@ skillsRouter.post('/', rateLimiters.publish, async (c) => {
   }
 
   try {
+    const publisher = await resolvePublisher(c);
     const arrayBuffer = await tarball.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
     const checksum = await calculateChecksum(buffer);
+    const publisherStatus: PublisherStatus = publisher
+      ? (signature ? 'verified' : 'claimed')
+      : 'anonymous';
+    const versionMetadata = await analyzeSkillTarball(buffer, publisherStatus);
+
+    if (versionMetadata.audit.status === 'blocked') {
+      return c.json({
+        error: 'audit_blocked',
+        message: versionMetadata.audit.riskSummary[0] || 'Skill bundle failed security audit',
+        trust: buildTrustInfo({
+          signature,
+          privacy,
+          checksum,
+          metadataJson: JSON.stringify(versionMetadata),
+        }),
+      }, 400);
+    }
 
     // Store in R2
     const r2Key = `${namespace}/${name}/${version}.tgz`;
@@ -187,16 +178,41 @@ skillsRouter.post('/', rateLimiters.publish, async (c) => {
     if (existingVersion) {
       await c.env.DB.prepare(
         `UPDATE skill_versions
-         SET tarball_url = ?, size = ?, checksumsha256 = ?, signature = ?, public_key = ?
+         SET tarball_url = ?, size = ?, checksumsha256 = ?, signature = ?, public_key = ?, metadata_json = ?
          WHERE id = ?`
-      ).bind(r2Key, buffer.length, checksum, signature || null, publicKey || null, existingVersion.id).run();
+      ).bind(
+        r2Key,
+        buffer.length,
+        checksum,
+        signature || null,
+        publicKey || null,
+        JSON.stringify(versionMetadata),
+        existingVersion.id
+      ).run();
     } else {
       const versionId = generateId();
       await c.env.DB.prepare(
-        `INSERT INTO skill_versions (id, skill_id, version, tarball_url, size, checksumsha256, signature, public_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(versionId, skillId, version, r2Key, buffer.length, checksum, signature || null, publicKey || null).run();
+        `INSERT INTO skill_versions (id, skill_id, version, tarball_url, size, checksumsha256, signature, public_key, metadata_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        versionId,
+        skillId,
+        version,
+        r2Key,
+        buffer.length,
+        checksum,
+        signature || null,
+        publicKey || null,
+        JSON.stringify(versionMetadata)
+      ).run();
     }
+
+    const trust = buildTrustInfo({
+      signature,
+      privacy,
+      checksum,
+      metadataJson: JSON.stringify(versionMetadata),
+    });
 
     return c.json({
       id: skillId,
@@ -206,6 +222,7 @@ skillsRouter.post('/', rateLimiters.publish, async (c) => {
       listed: privacy === 'public',
       tarballUrl: `/v1/skills/${namespace}/${name}/tarball/${version}`,
       signature: signature ? true : false,
+      trust,
     }, 201);
   } catch (e) {
     console.error('Publish error:', e);
@@ -307,7 +324,13 @@ skillsRouter.get('/share/:token', rateLimiters.resolveShare, async (c) => {
     }
 
     const metadata = parseVersionMetadata(share.metadata_json);
-    const trust = buildTrustInfo(share.signature, share.privacy);
+    const trust = buildTrustInfo({
+      signature: share.signature,
+      privacy: share.privacy,
+      checksum: share.checksumsha256,
+      metadataJson: share.metadata_json,
+      sourceType: 'share',
+    });
 
     return c.json({
       skill: {
@@ -324,6 +347,7 @@ skillsRouter.get('/share/:token', rateLimiters.resolveShare, async (c) => {
         checksum: share.checksumsha256 || '',
         listed: false,
         verified: trust.verified,
+        trust,
         createdAt: share.created_at,
         updatedAt: share.updated_at,
       },
@@ -380,7 +404,13 @@ skillsRouter.post('/share/:token/verify', async (c) => {
     ).bind(share.id).run();
 
     const metadata = parseVersionMetadata(share.metadata_json);
-    const trust = buildTrustInfo(share.signature, share.privacy);
+    const trust = buildTrustInfo({
+      signature: share.signature,
+      privacy: share.privacy,
+      checksum: share.checksumsha256,
+      metadataJson: share.metadata_json,
+      sourceType: 'share',
+    });
 
     return c.json({
       skill: {
@@ -397,6 +427,7 @@ skillsRouter.post('/share/:token/verify', async (c) => {
         checksum: share.checksumsha256 || '',
         listed: false,
         verified: trust.verified,
+        trust,
         createdAt: share.created_at,
         updatedAt: share.updated_at,
       },
@@ -442,7 +473,12 @@ skillsRouter.get('/:namespace/:name', async (c) => {
     );
     const version = await versionStmt.bind(result.id, result.version).first<SkillVersionRow>();
     const metadata = parseVersionMetadata(version?.metadata_json);
-    const trust = buildTrustInfo(version?.signature, result.privacy);
+    const trust = buildTrustInfo({
+      signature: version?.signature,
+      privacy: result.privacy,
+      checksum: version?.checksumsha256,
+      metadataJson: version?.metadata_json,
+    });
 
     return c.json({
       name: result.name,
@@ -627,6 +663,37 @@ async function authenticate(c: any, next: () => Promise<Response>) {
   }
 
   await next();
+}
+
+async function resolvePublisher(c: any): Promise<{ id: string; username: string } | null> {
+  const authHeader = c.req.header('Authorization');
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.slice(7);
+  const apiKeyUser = await c.env.DB.prepare(
+    `SELECT u.id, u.username FROM users u
+     JOIN api_keys k ON u.id = k.user_id
+     WHERE k.key_hash = ?`
+  ).bind(hashKey(token)).first() as { id: string; username: string } | null;
+
+  if (apiKeyUser) {
+    return apiKeyUser;
+  }
+
+  const oauthToken = await c.env.DB.prepare(
+    `SELECT user_id FROM oauth_tokens WHERE access_token = ? AND expires_at > unixepoch()`
+  ).bind(token).first() as { user_id: string } | null;
+
+  if (!oauthToken) {
+    return null;
+  }
+
+  return c.env.DB.prepare(
+    `SELECT id, username FROM users WHERE id = ?`
+  ).bind(oauthToken.user_id).first() as Promise<{ id: string; username: string } | null>;
 }
 
 function generateId(): string {

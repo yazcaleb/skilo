@@ -18,6 +18,7 @@ import {
   resolveInstallTargets,
 } from '../utils/install-targets.js';
 import { exitWithError, isJsonOutput, logInfo, logSuccess, printJson, printNote, printUsage } from '../utils/output.js';
+import { printTrustSummary } from '../utils/trust.js';
 import {
   discoverRepoSkills,
   formatRepoSkillChoices,
@@ -484,6 +485,12 @@ export async function importCommand(source: string, options: InstallOptions = {}
     if (packToken) {
       const client = await getClient();
       const pack = await client.resolvePack(packToken);
+      if (pack.trust?.auditStatus === 'blocked') {
+        exitWithError(pack.trust.riskSummary[0] || 'Pack install blocked');
+      }
+      if (pack.trust?.auditStatus === 'warning' && !isJsonOutput()) {
+        printTrustSummary(pack.trust);
+      }
       const packSelection = await selectPackSkills(source, pack, options);
 
       if (packSelection.mode === 'cancelled') {
@@ -527,6 +534,7 @@ export async function importCommand(source: string, options: InstallOptions = {}
             originalSkillCount: pack.skills.length,
             selectedSkillCount: packResult.installedSkills.length,
           },
+          trust: pack.trust || null,
           installedSkills: packResult.installedSkills,
         });
       }
@@ -686,7 +694,7 @@ async function importFromGitHub(source: string): Promise<{ skillPath: string; cl
   const response = await fetch(tarballUrl, {
     headers: {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'skilo-cli/1.0.21',
+      'User-Agent': 'skilo-cli/1.0.22',
     },
   });
 
@@ -753,6 +761,13 @@ async function importFromShareLink(source: string): Promise<{ skillPath: string;
   }
 
   const data = await response.json();
+
+  if (data.trust?.auditStatus === 'blocked') {
+    throw new Error(data.trust.riskSummary?.[0] || 'Share link install blocked');
+  }
+  if (data.trust?.auditStatus === 'warning' && !isJsonOutput()) {
+    printTrustSummary(data.trust);
+  }
 
   if (data.requiresPassword) {
     // Prompt for password
@@ -825,6 +840,10 @@ async function importFromPackLink(
   }> = [];
 
   logInfo(`Resolving pack ${pack.name || pack.token}`);
+
+  if (selectedSkills.some((skill) => skill.trust?.auditStatus === 'blocked')) {
+    throw new Error('Blocked skills cannot be installed from this pack');
+  }
 
   if (customized) {
     const subset = await client.createPackSubset(

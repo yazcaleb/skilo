@@ -45,7 +45,7 @@ export class ApiClient {
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'User-Agent': 'skilo-cli/1.0.21',
+      'User-Agent': 'skilo-cli/1.0.22',
     };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -113,7 +113,7 @@ export class ApiClient {
     claimToken?: string,
     signature?: string,
     publicKey?: string
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; trust?: SkillMetadata['trust'] }> {
     const url = `${this.baseUrl}/v1/skills`;
 
     const formData = new FormData();
@@ -136,14 +136,15 @@ export class ApiClient {
     const res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
-        'User-Agent': 'skilo-cli/1.0.21',
+        'User-Agent': 'skilo-cli/1.0.22',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
       body: formData,
     });
 
     if (!res.ok) {
-      throw new Error(`Publish failed: ${res.status} ${res.statusText}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `Publish failed: ${res.status} ${res.statusText}`);
     }
 
     return res.json();

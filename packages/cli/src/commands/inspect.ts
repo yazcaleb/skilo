@@ -1,7 +1,9 @@
 // Inspect skill without installing
 import { getClient } from '../api/client.js';
+import type { SkillMetadata } from '../types.js';
 import { normalizeSourceInput } from '../utils/source-kind.js';
 import { exitWithError, isJsonOutput, logWarn, printJson, printKeyValue, printNote, printPrimary, printSection, printUsage } from '../utils/output.js';
+import { printTrustSummary } from '../utils/trust.js';
 import { parsePackToken } from './share.js';
 
 export async function inspectCommand(source: string): Promise<void> {
@@ -37,13 +39,18 @@ export async function inspectCommand(source: string): Promise<void> {
       printSection(pack.name || 'Skill Pack', 'primary');
       printKeyValue('skills', String(pack.skills.length));
       printKeyValue('verified', `${verifiedCount}/${pack.skills.length}`);
+      if (pack.trust) {
+        printTrustSummary(pack.trust);
+      }
       printPrimary('');
       for (const skill of pack.skills) {
         printPrimary(`${skill.namespace}/${skill.name} ${skill.version ? `v${skill.version}` : ''}`.trim());
         if (skill.description) {
           printKeyValue('description', skill.description);
         }
-        if (skill.visibility) {
+        if (skill.trust) {
+          printTrustSummary(skill.trust);
+        } else if (skill.visibility) {
           printKeyValue('visibility', skill.visibility);
         }
       }
@@ -52,24 +59,7 @@ export async function inspectCommand(source: string): Promise<void> {
       return;
     }
 
-    let skill: {
-      name: string;
-      namespace: string;
-      description?: string;
-      version?: string;
-      author?: string | null;
-      homepage?: string | null;
-      repository?: string | null;
-      keywords?: string[];
-      checksum?: string;
-      size?: number;
-      verified?: boolean;
-      trust?: {
-        verified: boolean;
-        hasSignature: boolean;
-        visibility: 'public' | 'unlisted';
-      };
-    };
+    let skill: SkillMetadata;
     let linkInfo: {
       oneTime: boolean;
       expiresAt?: number | null;
@@ -146,10 +136,7 @@ export async function inspectCommand(source: string): Promise<void> {
     if (skill.size) {
       printKeyValue('size', `${(skill.size / 1024).toFixed(2)} KB`);
     }
-    if (skill.trust) {
-      printKeyValue('trust', skill.trust.verified ? 'verified signature' : 'unsigned');
-      printKeyValue('visibility', skill.trust.visibility);
-    }
+    printTrustSummary(skill.trust, { includeFindings: true });
     if (skill.checksum) {
       printKeyValue('checksum', `${skill.checksum.substring(0, 16)}...`);
     }

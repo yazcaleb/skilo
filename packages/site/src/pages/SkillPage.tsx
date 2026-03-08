@@ -137,6 +137,10 @@ function SkillPage() {
 
   const isVerified = trust?.verified || skill.verified;
   const isPublic = trust?.visibility === "public" || skill.listed;
+  const publisherStatus = trust?.publisherStatus || (isVerified ? "verified" : "anonymous");
+  const auditStatus = trust?.auditStatus || "clean";
+  const capabilities = trust?.capabilities || [];
+  const riskSummary = trust?.riskSummary || [];
 
   return (
     <main className={MAIN}>
@@ -161,15 +165,28 @@ function SkillPage() {
           <span>{(skill.size / 1024).toFixed(1)} KB</span>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {isVerified ? (
+          {publisherStatus === "verified" ? (
             <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs text-emerald-600 ring-1 ring-inset ring-emerald-200">
               Verified
             </span>
+          ) : publisherStatus === "claimed" ? (
+            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs text-blue-600 ring-1 ring-inset ring-blue-200">
+              Claimed
+            </span>
           ) : (
             <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs text-stone-500">
-              Unsigned
+              Anonymous
             </span>
           )}
+          <span className={`rounded-full px-2.5 py-0.5 text-xs ring-1 ring-inset ${
+            auditStatus === "blocked"
+              ? "bg-red-50 text-red-600 ring-red-200"
+              : auditStatus === "warning"
+                ? "bg-amber-50 text-amber-600 ring-amber-200"
+                : "bg-stone-100 text-stone-500 ring-stone-200"
+          }`}>
+            {auditStatus === "clean" ? "Audit clean" : auditStatus === "warning" ? "Audit warning" : "Audit blocked"}
+          </span>
           <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs text-stone-500">
             {isPublic ? "Public" : "Unlisted"}
           </span>
@@ -221,12 +238,25 @@ function SkillPage() {
       </p>
 
       {/* ── Keywords ── */}
-      {skill.keywords.length > 0 && (
+      {(skill.keywords.length > 0 || capabilities.length > 0) && (
         <div className="flex flex-wrap gap-1.5 mt-1">
           {skill.keywords.map((kw) => (
             <span key={kw} className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs text-stone-500">
               {kw}
             </span>
+          ))}
+          {capabilities.map((capability) => (
+            <span key={capability} className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs text-blue-600 ring-1 ring-inset ring-blue-200">
+              {capability}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {riskSummary.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {riskSummary.map((summary) => (
+            <p key={summary}>{summary}</p>
           ))}
         </div>
       )}
@@ -273,7 +303,16 @@ function SkillPage() {
             <dd className="font-mono text-[12px] text-stone-500 truncate">{skill.checksum}</dd>
 
             <dt className="text-stone-400">Trust</dt>
-            <dd className="text-stone-600">{isVerified ? "Verified signature" : "Unsigned or anonymous"}</dd>
+            <dd className="text-stone-600">
+              {publisherStatus === "verified"
+                ? "Verified publisher"
+                : publisherStatus === "claimed"
+                  ? "Claimed publisher"
+                  : "Anonymous publisher"}
+            </dd>
+
+            <dt className="text-stone-400">Audit</dt>
+            <dd className="text-stone-600">{auditStatus}</dd>
 
             <dt className="text-stone-400">Visibility</dt>
             <dd className="text-stone-600">{isPublic ? "Public" : "Unlisted share"}</dd>

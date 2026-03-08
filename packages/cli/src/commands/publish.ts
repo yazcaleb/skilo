@@ -10,6 +10,7 @@ import { validateSkillContent } from '../manifest.js';
 import { loadOrGenerateKeys, sign, encodeBase64Url } from '../utils/signing.js';
 import { readSkillContent } from '../utils/skill-file.js';
 import { blankLine, exitWithError, logSuccess, logWarn, printNote, printPrimary, printSection } from '../utils/output.js';
+import { printTrustSummary } from '../utils/trust.js';
 
 interface PublishOptions {
   sign?: boolean;
@@ -86,6 +87,18 @@ export async function publishLocalSkill(
   namespace: string;
   claimToken?: string;
   isListed: boolean;
+  trust?: {
+    publisherStatus: 'anonymous' | 'claimed' | 'verified';
+    verified: boolean;
+    hasSignature: boolean;
+    visibility: 'public' | 'unlisted';
+    auditStatus: 'clean' | 'warning' | 'blocked';
+    capabilities: string[];
+    riskSummary: string[];
+    findings: Array<{ code: string; severity: 'info' | 'warning' | 'blocked'; message: string }>;
+    sourceType: 'registry' | 'share' | 'local' | 'github' | 'pack' | 'derived_pack';
+    integrity: { checksum: string; hasSignature: boolean; signatureVerified: boolean };
+  };
 }> {
   const { cwd, skillFile, content } = await readSkillContent(path);
   const result = validateSkillContent(content);
@@ -143,7 +156,7 @@ export async function publishLocalSkill(
 
   const isListed = resolvePublishVisibility(options, authenticated, 'listed');
 
-  await client.publishSkill(
+  const publishResult = await client.publishSkill(
     manifest.name,
     namespace,
     manifest.description,
@@ -155,5 +168,9 @@ export async function publishLocalSkill(
     publicKey
   );
 
-  return { manifest, namespace, claimToken, isListed };
+  if (publishResult.trust?.auditStatus === 'warning') {
+    printTrustSummary(publishResult.trust);
+  }
+
+  return { manifest, namespace, claimToken, isListed, trust: publishResult.trust };
 }

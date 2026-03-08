@@ -17,9 +17,24 @@ export interface SkillMetadata {
   listed: boolean;
   verified: boolean;
   trust?: {
+    publisherStatus: 'anonymous' | 'claimed' | 'verified';
     verified: boolean;
     hasSignature: boolean;
     visibility: 'public' | 'unlisted';
+    auditStatus: 'clean' | 'warning' | 'blocked';
+    capabilities: string[];
+    riskSummary: string[];
+    findings: Array<{
+      code: string;
+      severity: 'info' | 'warning' | 'blocked';
+      message: string;
+    }>;
+    sourceType: 'registry' | 'share' | 'local' | 'github' | 'pack' | 'derived_pack';
+    integrity: {
+      checksum: string;
+      hasSignature: boolean;
+      signatureVerified: boolean;
+    };
   };
   createdAt: number;
   updatedAt: number;
@@ -52,12 +67,24 @@ export interface PackSkill {
   url: string;
   verified?: boolean;
   visibility?: 'public' | 'unlisted';
+  trust?: SkillMetadata['trust'];
 }
 
 export interface PackData {
   name: string;
   token: string;
   skills: PackSkill[];
+  trust?: SkillMetadata['trust'] & {
+    memberCounts?: {
+      clean: number;
+      warning: number;
+      blocked: number;
+      verified: number;
+    };
+    highestRisk?: 'clean' | 'warning' | 'blocked';
+    derived?: boolean;
+    sourcePackToken?: string | null;
+  };
 }
 
 export interface SiteStats {

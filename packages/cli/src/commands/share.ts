@@ -112,6 +112,7 @@ export async function shareCommand(
         command: 'share',
         skill: `${target.namespace}/${target.name}`,
         version: target.publishedVersion || null,
+        trust: target.trust || null,
         token: result.token,
         url: result.url,
         oneTime: options.oneTime || false,
@@ -297,7 +298,23 @@ async function bulkShareCommand(
 async function resolveShareTarget(
   skill: string,
   options: { listed?: boolean; unlisted?: boolean } = {}
-): Promise<{ namespace: string; name: string; publishedVersion?: string }> {
+): Promise<{
+  namespace: string;
+  name: string;
+  publishedVersion?: string;
+  trust?: {
+    publisherStatus: 'anonymous' | 'claimed' | 'verified';
+    verified: boolean;
+    hasSignature: boolean;
+    visibility: 'public' | 'unlisted';
+    auditStatus: 'clean' | 'warning' | 'blocked';
+    capabilities: string[];
+    riskSummary: string[];
+    findings: Array<{ code: string; severity: 'info' | 'warning' | 'blocked'; message: string }>;
+    sourceType: 'registry' | 'share' | 'local' | 'github' | 'pack' | 'derived_pack';
+    integrity: { checksum: string; hasSignature: boolean; signatureVerified: boolean };
+  };
+}> {
   try {
     await resolveSkillLocation(skill);
   } catch (e) {
@@ -310,7 +327,7 @@ async function resolveShareTarget(
     throw e;
   }
 
-  const { manifest, namespace } = await publishLocalSkill(skill, {
+  const { manifest, namespace, trust } = await publishLocalSkill(skill, {
     listed: options.listed,
     unlisted: options.unlisted ?? !options.listed,
   });
@@ -318,6 +335,7 @@ async function resolveShareTarget(
     namespace,
     name: manifest.name,
     publishedVersion: manifest.version || '0.1.0',
+    trust,
   };
 }
 

@@ -136,6 +136,9 @@ function PackPage() {
   }
 
   const verifiedCount = pack.skills.filter((s) => s.verified).length;
+  const packTrust = pack.trust;
+  const packAudit = packTrust?.auditStatus || "clean";
+  const packCapabilities = packTrust?.capabilities || [];
 
   return (
     <main className={MAIN}>
@@ -158,8 +161,43 @@ function PackPage() {
               </span>
             </>
           )}
+          {packTrust && (
+            <>
+              <span className="text-stone-300">&middot;</span>
+              <span className={
+                packAudit === "blocked"
+                  ? "text-red-500"
+                  : packAudit === "warning"
+                    ? "text-amber-500"
+                    : "text-stone-500"
+              }>
+                {packAudit === "clean" ? "audit clean" : `audit ${packAudit}`}
+              </span>
+            </>
+          )}
         </div>
       </div>
+
+      {packTrust && (
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs text-stone-500">
+            {packTrust.publisherStatus}
+          </span>
+          {packCapabilities.map((capability) => (
+            <span key={capability} className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs text-blue-600 ring-1 ring-inset ring-blue-200">
+              {capability}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {packTrust?.riskSummary && packTrust.riskSummary.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {packTrust.riskSummary.map((summary) => (
+            <p key={summary}>{summary}</p>
+          ))}
+        </div>
+      )}
 
       {/* ── Install (terminal) ── */}
       <div className="mt-4 overflow-hidden rounded-xl border border-stone-800/80 shadow-lg shadow-stone-900/5">
@@ -280,11 +318,29 @@ function PackPage() {
                         Verified
                       </span>
                     )}
+                    {skill.trust?.auditStatus && skill.trust.auditStatus !== "clean" && (
+                      <span className={`rounded-full px-1.5 py-px text-[10px] ring-1 ring-inset ${
+                        skill.trust.auditStatus === "blocked"
+                          ? "bg-red-50 text-red-600 ring-red-200"
+                          : "bg-amber-50 text-amber-600 ring-amber-200"
+                      }`}>
+                        {skill.trust.auditStatus}
+                      </span>
+                    )}
                   </div>
                   {skill.description && (
                     <p className="mt-0.5 text-sm text-stone-600 line-clamp-1">
                       {skill.description}
                     </p>
+                  )}
+                  {skill.trust?.capabilities && skill.trust.capabilities.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {skill.trust.capabilities.map((capability) => (
+                        <span key={capability} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-600 ring-1 ring-inset ring-blue-200">
+                          {capability}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </Link>
                 <Link

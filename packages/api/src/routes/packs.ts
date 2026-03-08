@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../index.js';
 import { rateLimiters } from '../middleware/rateLimit.js';
+import { aggregatePackTrust, buildTrustInfo } from '../utils/trust.js';
 
 export const packsRouter = new Hono<{ Bindings: Env }>();
 
@@ -29,6 +30,9 @@ interface PackItemRow {
   version: string;
   verified: boolean;
   visibility: 'public' | 'unlisted';
+  checksum: string | null;
+  signature: string | null;
+  metadataJson: string | null;
   position: number;
 }
 
@@ -65,7 +69,9 @@ async function getPackItems(db: D1Database, packId: string): Promise<PackItemRow
             s.name,
             s.description,
             s.latest_version as version,
+            sv.checksumsha256,
             sv.signature,
+            sv.metadata_json,
             s.privacy
      FROM pack_items pi
      JOIN share_links sl ON pi.share_link_id = sl.id
@@ -84,6 +90,9 @@ async function getPackItems(db: D1Database, packId: string): Promise<PackItemRow
     version: row.version,
     verified: Boolean(row.signature),
     visibility: row.privacy === 'public' ? 'public' : 'unlisted',
+    checksum: row.checksumsha256,
+    signature: row.signature,
+    metadataJson: row.metadata_json,
     position: row.position,
   }));
 }
@@ -192,7 +201,9 @@ packsRouter.post('/', rateLimiters.createPack, async (c) => {
     }
 
     const uniqueShares = dedupeSharesInOrder(
-      share_tokens.map((token: string) => foundTokens.get(token)).filter(Boolean)
+      share_tokens
+        .map((token: string) => foundTokens.get(token))
+        .filter((row): row is ShareLookupRow => Boolean(row))
     );
     const packToken = createRandomToken();
     await insertPack(c.env.DB, name, packToken, uniqueShares);
@@ -254,13 +265,14 @@ packsRouter.post('/subset', rateLimiters.createPack, async (c) => {
     }
 
     const sourceTokenMap = new Map(sourceItems.map((item) => [item.shareToken, item]));
-    const invalidTokens = [...new Set(keep)].filter((token) => !sourceTokenMap.has(token));
-    if (invalidTokens.length > 0) {
+    const invalidTokens = [...new Set(keep)] as string[];
+    const missingTokens = invalidTokens.filter((token) => !sourceTokenMap.has(token));
+    if (missingTokens.length > 0) {
       return c.json(
         {
           error: 'validation_error',
-          message: `keep tokens must belong to the source pack: ${invalidTokens.join(', ')}`,
-          invalid_tokens: invalidTokens,
+          message: `keep tokens must belong to the source pack: ${missingTokens.join(', ')}`,
+          invalid_tokens: missingTokens,
         },
         400
       );
@@ -272,6 +284,19 @@ packsRouter.post('/subset', rateLimiters.createPack, async (c) => {
     if (keptItems.length === 0) {
       return c.json(
         { error: 'validation_error', message: 'At least one skill must remain in the pack' },
+        400
+      );
+    }
+
+    if (keptItems.some((item) => buildTrustInfo({
+      signature: item.signature,
+      privacy: item.visibility,
+      checksum: item.checksum,
+      metadataJson: item.metadataJson,
+      sourceType: 'share',
+    }).auditStatus === 'blocked')) {
+      return c.json(
+        { error: 'validation_error', message: 'Blocked skills cannot be included in a derived pack' },
         400
       );
     }
@@ -341,19 +366,77 @@ packsRouter.post('/subset', rateLimiters.createPack, async (c) => {
   }
 });
 
+// Create a ref pack (arbitrary refs stored in KV)
+packsRouter.post('/from-refs', rateLimiters.createPack, async (c) => {
+  const body = await c.req.json();
+  const rawRefs = body.refs;
+
+  if (!Array.isArray(rawRefs) || rawRefs.length === 0) {
+    return c.json({ error: 'validation_error', message: 'refs must be a non-empty array' }, 400);
+  }
+  if (rawRefs.length > 50) {
+    return c.json({ error: 'validation_error', message: 'refs cannot exceed 50 items' }, 400);
+  }
+
+  const refs = rawRefs.map((r: unknown) => String(r).trim()).filter(Boolean);
+  if (refs.length === 0) {
+    return c.json({ error: 'validation_error', message: 'refs must contain at least one non-empty ref' }, 400);
+  }
+
+  try {
+    const seed = `ref-pack:${JSON.stringify([...refs].sort())}`;
+    const token = await createDeterministicToken(seed);
+
+    const existing = await c.env.SKILLPACK_KV.get(`ref-pack:${token}`);
+    if (existing) {
+      return c.json({ token, url: `https://skilo.xyz/p/${token}`, count: refs.length });
+    }
+
+    await c.env.SKILLPACK_KV.put(
+      `ref-pack:${token}`,
+      JSON.stringify({ refs, createdAt: Date.now() }),
+      { expirationTtl: 7776000 } // 90 days
+    );
+
+    return c.json({ token, url: `https://skilo.xyz/p/${token}`, count: refs.length }, 201);
+  } catch (e) {
+    console.error('Ref pack creation error:', e);
+    return c.json({ error: 'create_failed', message: (e as Error).message }, 500);
+  }
+});
+
 // Resolve a pack
 packsRouter.get('/:token', rateLimiters.resolveShare, async (c) => {
-  const token = c.req.param('token');
+  const token = c.req.param('token') || '';
 
   try {
     const pack = await getPackByToken(c.env.DB, token);
 
     if (!pack) {
+      // Fallback: check KV for ref packs
+      const refPack = await c.env.SKILLPACK_KV.get(`ref-pack:${token}`, { type: 'json' }) as { refs: string[]; createdAt: number } | null;
+      if (refPack) {
+        return c.json({
+          name: null,
+          token,
+          type: 'ref-pack',
+          refs: refPack.refs,
+        });
+      }
       return c.json({ error: 'not_found', message: 'Pack not found' }, 404);
     }
 
     const items = await getPackItems(c.env.DB, pack.id);
-    const skills = items.map((row) => ({
+    const skills = items.map((row) => {
+      const trust = buildTrustInfo({
+        signature: row.signature,
+        privacy: row.visibility,
+        checksum: row.checksum,
+        metadataJson: row.metadataJson,
+        sourceType: 'share',
+      });
+
+      return {
       namespace: row.namespace,
       name: row.name,
       description: row.description,
@@ -362,12 +445,16 @@ packsRouter.get('/:token', rateLimiters.resolveShare, async (c) => {
       url: `https://skilo.xyz/s/${row.shareToken}`,
       verified: row.verified,
       visibility: row.visibility,
-    }));
+      trust,
+      };
+    });
+    const trust = aggregatePackTrust(skills.map((skill) => skill.trust));
 
     return c.json({
       name: pack.name,
       token: pack.token,
       skills,
+      trust,
     });
   } catch (e) {
     console.error('Pack resolve error:', e);

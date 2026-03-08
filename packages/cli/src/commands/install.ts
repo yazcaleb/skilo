@@ -16,6 +16,7 @@ import {
   resolveInstallTargets,
 } from '../utils/install-targets.js';
 import { exitWithError, isJsonOutput, logInfo, logSuccess, printJson, printNote, printUsage } from '../utils/output.js';
+import { printTrustSummary } from '../utils/trust.js';
 import { isGitHubRepoLike, parseRepoSkillShorthand } from '../utils/repo-skills.js';
 
 function looksLikeRegistryVersion(value: string): boolean {
@@ -94,7 +95,14 @@ export async function installCommand(skill: string, options: InstallOptions = {}
     const metadata = await client.getSkillMetadata(namespace, name);
     const versionToInstall = version || metadata.version;
 
+    if (metadata.trust?.auditStatus === 'blocked') {
+      exitWithError(metadata.trust.riskSummary[0] || `Install blocked for ${namespace}/${name}`);
+    }
+
     logInfo(`Installing ${namespace}/${name}@${versionToInstall}`);
+    if (metadata.trust?.auditStatus === 'warning' && !isJsonOutput()) {
+      printTrustSummary(metadata.trust);
+    }
 
     // Get verification info
     const verifyResponse = await fetch(`${client.baseUrl}/v1/skills/${namespace}/${name}/verify?version=${versionToInstall}`);
@@ -167,6 +175,7 @@ export async function installCommand(skill: string, options: InstallOptions = {}
         skill: `${namespace}/${name}`,
         version: versionToInstall,
         checksumVerified: Boolean(expectedChecksum),
+        trust: metadata.trust || null,
         targetMode: installResolution.mode,
         targets: destinations.map((destination) => ({
           key: destination.key,

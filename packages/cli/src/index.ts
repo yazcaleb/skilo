@@ -51,7 +51,7 @@ function addInstallTargetOptions(command: Command): Command {
 program
   .name('skilo')
   .description('Share agent skills with a link. No repo required.')
-  .version('1.0.21');
+  .version('1.0.22');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);
@@ -166,7 +166,7 @@ program
 // Trust & Ops
 program.command('lock').description('Generate lockfile').action(lockCommand);
 program.command('verify').description('Verify lockfile').action(verifyLockCommand);
-program.command('audit').description('Audit installed skills').action(auditCommand);
+program.command('audit [source]').description('Audit installed skills and local bundles').action(auditCommand);
 addInstallTargetOptions(
   program
     .command('sync [source] [targets...]')
