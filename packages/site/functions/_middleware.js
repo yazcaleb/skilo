@@ -180,6 +180,9 @@ export async function onRequest(context) {
         out += `- **${s.namespace}/${s.name}** — ${s.description} ([view](https://skilo.xyz/s/${s.shareToken}))\n`;
       }
       out += `\n## Install all\n\n\`\`\`\n`;
+      out += `skilo add https://skilo.xyz/p/${token}\n`;
+      out += `\`\`\`\n\n`;
+      out += `## Individual skills\n\n\`\`\`\n`;
       for (const s of data.skills) {
         out += `skilo add skilo.xyz/s/${s.shareToken}\n`;
       }

@@ -48,7 +48,7 @@ function addInstallTargetOptions(command: Command): Command {
 program
   .name('skilo')
   .description('Tiny sharing layer for agent skills')
-  .version('1.0.11');
+  .version('1.0.12');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);
@@ -146,10 +146,18 @@ program.command('verify').description('Verify lockfile').action(verifyLockComman
 program.command('audit').description('Audit installed skills').action(auditCommand);
 program.command('sync').description('Sync skills with lockfile').action(syncCommand);
 
-// Development
+// Development / Packs
 program.command('init [name]').description('Create new skill').action((name) => initCommand(name));
 program.command('validate').description('Validate SKILL.md').action(validateCommand);
-program.command('pack').description('Create .tgz bundle').action(packCommand);
+program
+  .command('pack [sources...]')
+  .description('Create a .tgz bundle or a curated shareable pack')
+  .option('--name <name>', 'Name for the curated pack')
+  .option('--one-time', 'Create one-time share links for generated pack items')
+  .option('--expires <time>', 'Expires in (e.g., 1h, 2d)')
+  .option('--uses <n>', 'Max uses for generated share links')
+  .option('--password', 'Password protect generated share links')
+  .action((sources, options) => packCommand(sources, options));
 
 function printInteractiveWelcome(): void {
   printSection('Skilo');

@@ -100,6 +100,16 @@ skilo import ./skill.skl
 
 Skilo now supports Vercel-style multi-skill GitHub repos directly. Use `--list` to inspect discovered skills, `--skill <name>` to install a specific one, or `--all` to install everything in the source repo.
 
+### Create a curated pack
+
+```bash
+# Pack together any mix of local skills, refs, and share links
+skilo pack ./skills/reviewer flrabbit/original-landing-page-builder skilo.xyz/s/WMnC3vqJ --name "Founder's starter pack"
+
+# Install the whole pack with one command
+skilo add https://skilo.xyz/p/abc123
+```
+
 ### Inspect before installing
 
 ```bash
@@ -118,6 +128,7 @@ skilo inspect https://skilo.xyz/s/a3xK9mP2 --json
 | `skilo inspect <skill>` | View skill details without installing |
 | `skilo export [path]` | Export to .skl file |
 | `skilo import <source>` | Import from GitHub, .skl, or local path |
+| `skilo pack [sources...]` | Create a .tgz bundle or a curated shareable pack |
 | `skilo publish [path]` | Publish to the registry |
 | `skilo init [name]` | Create a new skill |
 | `skilo validate` | Validate SKILL.md |
@@ -127,6 +138,11 @@ Repo-source options for `add`, `install`, and `import`:
 - `--list` list discovered skills in a repo source without installing
 - `--skill <name>` install a specific discovered skill directory
 - `--all` install every discovered skill in a repo source
+
+Pack options for `pack [sources...]`:
+
+- `--name <name>` set the pack title
+- `--one-time`, `--expires`, `--uses`, `--password` apply to generated share links for local/ref sources
 
 ## Agent-Friendly Usage
 

@@ -16,6 +16,7 @@ import {
   normalizeGitHubSource,
   selectRepoSkills,
 } from '../utils/repo-skills.js';
+import { parsePackToken } from './share.js';
 
 export async function importCommand(source: string, options: InstallOptions = {}): Promise<void> {
   if (!source) {
@@ -46,6 +47,26 @@ export async function importCommand(source: string, options: InstallOptions = {}
     }
 
     let skillPath: string;
+    const packToken = parsePackToken(source);
+
+    if (packToken) {
+      const packResult = await importFromPackLink(packToken, source, options);
+      logSuccess(`Imported pack ${packResult.name}`);
+
+      if (isJsonOutput()) {
+        printJson({
+          command: 'import',
+          source,
+          mode: 'pack',
+          pack: {
+            token: packResult.token,
+            name: packResult.name,
+          },
+          installedSkills: packResult.installedSkills,
+        });
+      }
+      return;
+    }
 
     if (isGitHubRepoLike(source)) {
       const imported = await importFromGitHub(normalizeGitHubSource(source));
@@ -159,7 +180,7 @@ async function importFromGitHub(source: string): Promise<{ skillPath: string; cl
   const response = await fetch(tarballUrl, {
     headers: {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'skilo-cli/1.0.11',
+      'User-Agent': 'skilo-cli/1.0.12',
     },
   });
 
@@ -269,6 +290,54 @@ async function importFromShareLink(source: string): Promise<{ skillPath: string;
   await rm(tempTar);
 
   return { skillPath: tempDir, cleanupPath: tempDir };
+}
+
+async function importFromPackLink(
+  token: string,
+  source: string,
+  options: InstallOptions = {}
+): Promise<{
+  token: string;
+  name: string;
+  installedSkills: Array<{
+    source: string;
+    name: string;
+    targets: Array<{ key: string; label: string; dirs: string[] }>;
+    installedDirs: string[];
+  }>;
+}> {
+  const client = await getClient();
+  const pack = await client.resolvePack(token);
+  const installedSkills: Array<{
+    source: string;
+    name: string;
+    targets: Array<{ key: string; label: string; dirs: string[] }>;
+    installedDirs: string[];
+  }> = [];
+
+  logInfo(`Resolving pack ${pack.name || token}`);
+
+  for (const skill of pack.skills) {
+    const shareSource = `https://skilo.xyz/s/${skill.shareToken}`;
+    const imported = await importFromShareLink(shareSource);
+    try {
+      const installResult = await installSkill(imported.skillPath, options);
+      installedSkills.push({
+        source: shareSource,
+        name: installResult.name,
+        targets: installResult.targets,
+        installedDirs: installResult.installedDirs,
+      });
+    } finally {
+      await rm(imported.cleanupPath, { recursive: true, force: true });
+    }
+  }
+
+  return {
+    token: pack.token,
+    name: pack.name,
+    installedSkills,
+  };
 }
 
 async function importFromUrl(source: string): Promise<{ skillPath: string; cleanupPath: string }> {

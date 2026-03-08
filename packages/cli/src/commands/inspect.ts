@@ -2,6 +2,7 @@
 import { getClient } from '../api/client.js';
 import { normalizeSourceInput } from '../utils/source-kind.js';
 import { exitWithError, isJsonOutput, logWarn, printJson, printKeyValue, printNote, printPrimary, printSection, printUsage } from '../utils/output.js';
+import { parsePackToken } from './share.js';
 
 export async function inspectCommand(source: string): Promise<void> {
   if (!source) {
@@ -16,6 +17,35 @@ export async function inspectCommand(source: string): Promise<void> {
 
   try {
     source = normalizeSourceInput(source);
+    const packToken = parsePackToken(source);
+
+    if (packToken) {
+      const client = await getClient();
+      const pack = await client.resolvePack(packToken);
+
+      if (isJsonOutput()) {
+        printJson({
+          command: 'inspect',
+          source,
+          pack,
+          installCommand: `skilo add https://skilo.xyz/p/${pack.token}`,
+        });
+        return;
+      }
+
+      printSection(pack.name || 'Skill Pack', 'primary');
+      printKeyValue('skills', String(pack.skills.length));
+      printPrimary('');
+      for (const skill of pack.skills) {
+        printPrimary(`${skill.namespace}/${skill.name} ${skill.version ? `v${skill.version}` : ''}`.trim());
+        if (skill.description) {
+          printKeyValue('description', skill.description);
+        }
+      }
+      printPrimary('');
+      printNote('install', `skilo add https://skilo.xyz/p/${pack.token}`, 'primary');
+      return;
+    }
 
     let skill: {
       name: string;

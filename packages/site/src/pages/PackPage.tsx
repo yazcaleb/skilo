@@ -26,10 +26,8 @@ function PackPage() {
 
   const handleCopy = async () => {
     if (!pack) return;
-    const commands = pack.skills
-      .map((s) => `npx skilo-cli add ${s.namespace}/${s.name}`)
-      .join("\n");
-    await navigator.clipboard.writeText(commands);
+    const command = `npx skilo-cli add https://skilo.xyz/p/${pack.token}`;
+    await navigator.clipboard.writeText(command);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -68,8 +66,14 @@ function PackPage() {
         </div>
         <button type="button" onClick={handleCopy} className={PRIMARY_BTN}>
           <CopyIcon className="h-4 w-4" />
-          {copied ? "Copied" : "Install all"}
+          {copied ? "Copied" : "Copy install"}
         </button>
+      </div>
+
+      <div className="mt-4">
+        <code className="block overflow-x-auto rounded bg-stone-100 px-3 py-2 font-mono text-[13px] whitespace-nowrap text-stone-700">
+          {`npx skilo-cli add https://skilo.xyz/p/${pack.token}`}
+        </code>
       </div>
 
       {/* Skill list */}

@@ -35,11 +35,14 @@ packsRouter.post('/', rateLimiters.createPack, async (c) => {
     // Look up all share tokens
     const placeholders = share_tokens.map(() => '?').join(', ');
     const stmt = await c.env.DB.prepare(
-      `SELECT id, token FROM share_links WHERE token IN (${placeholders})`
+      `SELECT sl.id, sl.token, sl.skill_id, s.namespace, s.name, s.latest_version
+       FROM share_links sl
+       JOIN skills s ON sl.skill_id = s.id
+       WHERE sl.token IN (${placeholders})`
     );
     const result = await stmt.bind(...share_tokens).all();
     const foundTokens = new Map(
-      (result.results || []).map((r: any) => [r.token, r.id])
+      (result.results || []).map((r: any) => [r.token, r])
     );
 
     // Check for invalid tokens
@@ -53,6 +56,18 @@ packsRouter.post('/', rateLimiters.createPack, async (c) => {
         },
         400
       );
+    }
+
+    const uniqueShares: Array<{ id: string; token: string }> = [];
+    const seenSkills = new Set<string>();
+    for (const token of share_tokens) {
+      const row = foundTokens.get(token);
+      const skillKey = `${row.skill_id}:${row.latest_version}`;
+      if (seenSkills.has(skillKey)) {
+        continue;
+      }
+      seenSkills.add(skillKey);
+      uniqueShares.push({ id: row.id, token: row.token });
     }
 
     // Generate pack id and token
@@ -71,11 +86,10 @@ packsRouter.post('/', rateLimiters.createPack, async (c) => {
     ).bind(packId, packToken, name).run();
 
     // Insert pack items with position
-    const insertStmts = share_tokens.map((t: string, i: number) => {
-      const shareLinkId = foundTokens.get(t)!;
+    const insertStmts = uniqueShares.map((share, i: number) => {
       return c.env.DB.prepare(
         `INSERT INTO pack_items (pack_id, share_link_id, position) VALUES (?, ?, ?)`
-      ).bind(packId, shareLinkId, i);
+      ).bind(packId, share.id, i);
     });
     await c.env.DB.batch(insertStmts);
 
@@ -83,7 +97,7 @@ packsRouter.post('/', rateLimiters.createPack, async (c) => {
       {
         token: packToken,
         url: `https://skilo.xyz/p/${packToken}`,
-        count: share_tokens.length,
+        count: uniqueShares.length,
       },
       201
     );

@@ -4,6 +4,7 @@ import type {
   SkillSearchResult,
   SkillMetadata,
   SkillVersion,
+  PackData,
   AuthToken,
   ApiKey,
   User,
@@ -42,7 +43,7 @@ export class ApiClient {
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'User-Agent': 'skilo-cli/1.0.11',
+      'User-Agent': 'skilo-cli/1.0.12',
     };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -133,7 +134,7 @@ export class ApiClient {
     const res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
-        'User-Agent': 'skilo-cli/1.0.11',
+        'User-Agent': 'skilo-cli/1.0.12',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
       body: formData,
@@ -257,6 +258,17 @@ export class ApiClient {
 
     if (!res.ok) {
       throw new Error(`Create pack failed: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
+  async resolvePack(token: string): Promise<PackData> {
+    const url = `${this.baseUrl}/v1/packs/${token}`;
+    const res = await fetchWithRetry(url, { headers: this.getHeaders() });
+
+    if (!res.ok) {
+      throw new Error(`Resolve pack failed: ${res.status} ${res.statusText}`);
     }
 
     return res.json();

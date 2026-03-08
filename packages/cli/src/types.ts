@@ -43,6 +43,21 @@ export interface SkillVersion {
   createdAt: number;
 }
 
+export interface PackSkill {
+  namespace: string;
+  name: string;
+  description: string;
+  version: string;
+  shareToken: string;
+  url: string;
+}
+
+export interface PackData {
+  name: string;
+  token: string;
+  skills: PackSkill[];
+}
+
 export interface PublishSkillRequest {
   name: string;
   namespace: string;

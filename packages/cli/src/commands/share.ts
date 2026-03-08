@@ -14,6 +14,16 @@ function parseSkillRef(skill: string): { namespace: string; name: string } {
   return { namespace: parts[0], name: parts[1] };
 }
 
+export function parseShareToken(source: string): string | null {
+  const match = source.match(/\/s\/([A-Za-z0-9_-]+)$/);
+  return match ? match[1] : null;
+}
+
+export function parsePackToken(source: string): string | null {
+  const match = source.match(/\/p\/([A-Za-z0-9_-]+)$/);
+  return match ? match[1] : null;
+}
+
 async function promptPassword(): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
@@ -282,5 +292,65 @@ async function resolveShareTarget(skill: string): Promise<{ namespace: string; n
     namespace,
     name: manifest.name,
     publishedVersion: manifest.version || '0.1.0',
+  };
+}
+
+export async function ensureShareLinkForSource(
+  source: string,
+  options: { oneTime?: boolean; expires?: string; uses?: number; password?: boolean } = {}
+): Promise<{ token: string; url: string; namespace?: string; name?: string; created: boolean }> {
+  const existingShareToken = parseShareToken(source);
+  if (existingShareToken) {
+    return {
+      token: existingShareToken,
+      url: source.startsWith('http') ? source : `https://${source}`,
+      created: false,
+    };
+  }
+
+  const client = await getClient();
+  const packToken = parsePackToken(source);
+  if (packToken) {
+    const pack = await client.resolvePack(packToken);
+    throw new Error(
+      `Pack links cannot be nested directly. Use the contained skills instead: ${pack.skills.map((skill) => skill.url).join(', ')}`
+    );
+  }
+
+  let expiresAt: number | undefined;
+  if (options.expires) {
+    const match = options.expires.match(/^(\d+)(h|d|m)$/);
+    if (!match) {
+      exitWithError('Invalid expires format. Use 1h, 2d, or 30m.');
+    }
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    const now = Date.now();
+    if (unit === 'h') expiresAt = now + value * 60 * 60 * 1000;
+    else if (unit === 'd') expiresAt = now + value * 24 * 60 * 60 * 1000;
+    else if (unit === 'm') expiresAt = now + value * 60 * 1000;
+  }
+
+  let password: string | undefined;
+  if (options.password) {
+    password = await promptPassword();
+  }
+
+  const target = await resolveShareTarget(source);
+  const result = await client.createShareLink(
+    target.namespace,
+    target.name,
+    options.oneTime || false,
+    expiresAt,
+    options.uses,
+    password
+  );
+
+  return {
+    token: result.token,
+    url: result.url,
+    namespace: target.namespace,
+    name: target.name,
+    created: true,
   };
 }

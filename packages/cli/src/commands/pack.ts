@@ -1,17 +1,93 @@
-import { createReadStream, createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
-import { createGzip } from 'node:zlib';
 import { join } from 'node:path';
 import * as tar from 'tar';
-import { readFile as readFileAsync, unlink } from 'node:fs/promises';
 import { statSync } from 'node:fs';
+import { getClient } from '../api/client.js';
 import { validateSkillContent } from '../manifest.js';
 import { readSkillContent } from '../utils/skill-file.js';
+import { exitWithError, isJsonOutput, logInfo, logSuccess, printJson, printPrimary } from '../utils/output.js';
+import { ensureShareLinkForSource } from './share.js';
 
 const DEFAULT_OUTPUT = 'skilo.tgz';
 
-export async function packCommand(_args?: string[]): Promise<void> {
-  const outputFile = DEFAULT_OUTPUT;
+interface PackOptions {
+  output?: string;
+  name?: string;
+  oneTime?: boolean;
+  expires?: string;
+  uses?: number;
+  password?: boolean;
+}
+
+export async function packCommand(
+  sources: string[] = [],
+  options: PackOptions = {}
+): Promise<void> {
+  if (sources.length === 0) {
+    await createBundle(options.output || DEFAULT_OUTPUT);
+    return;
+  }
+
+  await createCuratedPack(sources, options);
+}
+
+async function createCuratedPack(sources: string[], options: PackOptions): Promise<void> {
+  const client = await getClient();
+  const tokens = new Set<string>();
+  const included: Array<{ source: string; token: string; url: string; created: boolean }> = [];
+
+  for (const source of sources) {
+    const result = await ensureShareLinkForSource(source, {
+      oneTime: options.oneTime,
+      expires: options.expires,
+      uses: options.uses,
+      password: options.password,
+    });
+
+    if (tokens.has(result.token)) {
+      continue;
+    }
+
+    tokens.add(result.token);
+    included.push({
+      source,
+      token: result.token,
+      url: result.url,
+      created: result.created,
+    });
+  }
+
+  if (included.length === 0) {
+    exitWithError('Pack creation failed: no valid skills were provided');
+  }
+
+  const packName = options.name || derivePackName(sources);
+  const pack = await client.createPack(packName, [...tokens]);
+
+  logSuccess(`Pack ready with ${pack.count} skills`);
+
+  if (isJsonOutput()) {
+    printJson({
+      command: 'pack',
+      mode: 'curated',
+      name: packName,
+      pack,
+      included,
+    });
+    return;
+  }
+
+  printPrimary(pack.url);
+}
+
+function derivePackName(sources: string[]): string {
+  if (sources.length === 1) {
+    return `Pack from ${sources[0]}`;
+  }
+
+  return `Curated pack (${sources.length} skills)`;
+}
+
+async function createBundle(outputFile: string): Promise<void> {
   const cwd = process.cwd();
   let skillFile: string;
 
@@ -22,24 +98,19 @@ export async function packCommand(_args?: string[]): Promise<void> {
     const result = validateSkillContent(content);
 
     if (!result.valid) {
-      console.error(`Pack failed: ${skillFile} is invalid`);
-      for (const error of result.errors) {
-        console.error(`  ${error.field}: ${error.message}`);
-      }
-      process.exit(1);
+      exitWithError(
+        `${skillFile} is invalid: ${result.errors.map((error) => `${error.field}: ${error.message}`).join(', ')}`
+      );
     }
   } catch (e) {
-    console.error(`Error: ${(e as Error).message}`);
-    process.exit(1);
+    exitWithError((e as Error).message);
   }
 
-  // Collect files that exist
   const files: string[] = [skillFile!];
   try { statSync(join(cwd, 'index.js')); files.push('index.js'); } catch {}
   try { statSync(join(cwd, 'index.ts')); files.push('index.ts'); } catch {}
   try { statSync(join(cwd, 'src')); files.push('src'); } catch {}
 
-  // Create tarball
   try {
     await tar.create({
       cwd,
@@ -47,15 +118,14 @@ export async function packCommand(_args?: string[]): Promise<void> {
       file: outputFile,
     }, files);
 
-    console.log(`✓ Created ${outputFile}`);
+    logSuccess(`Created ${outputFile}`);
   } catch {
-    // Fallback: just the required file
     await tar.create({
       cwd,
       gzip: true,
       file: outputFile,
     }, [skillFile!]);
 
-    console.log(`✓ Created ${outputFile} (${skillFile} only)`);
+    logInfo(`Created ${outputFile} (${skillFile} only)`);
   }
 }
