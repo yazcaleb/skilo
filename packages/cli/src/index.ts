@@ -29,6 +29,9 @@ const program = new Command();
 function addInstallTargetOptions(command: Command): Command {
   return command
     .option('-g, --global', 'Install globally')
+    .option('-s, --skill <name...>', 'Select specific skill directories from a repo source')
+    .option('--list', 'List available skills in a repo source without installing')
+    .option('--all', 'Install every discovered skill from a repo source')
     .option('--cc', 'Install into Claude Code')
     .option('--claude-code', 'Install into Claude Code')
     .option('--codex', 'Install into Codex')
@@ -45,7 +48,7 @@ function addInstallTargetOptions(command: Command): Command {
 program
   .name('skilo')
   .description('Tiny sharing layer for agent skills')
-  .version('1.0.10');
+  .version('1.0.11');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);

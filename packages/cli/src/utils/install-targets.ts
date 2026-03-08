@@ -3,6 +3,9 @@ import { join } from 'node:path';
 
 export interface InstallOptions {
   global?: boolean;
+  skill?: string[];
+  list?: boolean;
+  all?: boolean;
   cc?: boolean;
   claudeCode?: boolean;
   codex?: boolean;

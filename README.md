@@ -89,9 +89,16 @@ skilo add namespace/skill-name
 # From GitHub
 skilo import github:user/repo
 
+# From a multi-skill repo
+skilo add owner/repo --list
+skilo add owner/repo --skill resolve-issue --codex
+skilo add https://github.com/user/repo/tree/main/skills/resolve-issue --cursor
+
 # From .skl file
 skilo import ./skill.skl
 ```
+
+Skilo now supports Vercel-style multi-skill GitHub repos directly. Use `--list` to inspect discovered skills, `--skill <name>` to install a specific one, or `--all` to install everything in the source repo.
 
 ### Inspect before installing
 
@@ -115,6 +122,12 @@ skilo inspect https://skilo.xyz/s/a3xK9mP2 --json
 | `skilo init [name]` | Create a new skill |
 | `skilo validate` | Validate SKILL.md |
 
+Repo-source options for `add`, `install`, and `import`:
+
+- `--list` list discovered skills in a repo source without installing
+- `--skill <name>` install a specific discovered skill directory
+- `--all` install every discovered skill in a repo source
+
 ## Agent-Friendly Usage
 
 Skilo is designed to work for both humans and agents.
@@ -123,6 +136,16 @@ Skilo is designed to work for both humans and agents.
 - Run `npx skilo-cli --json` for a machine-readable starter payload.
 - Add `--json` to `share`, `add`, `import`, `inspect`, `search`, and `info` when you want structured output.
 - Set `SKILO_TARGETS=codex,cursor` to control default install targets in non-interactive environments.
+
+## Vercel Compatibility
+
+Skilo is compatible with Vercel-style GitHub skill repos and keeps the parts that matter:
+
+- install from `owner/repo` when combined with `--list`, `--skill`, or `--all`
+- install from full GitHub repo and `tree/...` URLs
+- discover nested `SKILL.md` directories in multi-skill repos
+- detect skill paths referenced from common plugin manifests
+- keep unlisted sharing, one-time links, expiring links, password protection, and direct 1:1 handoff on top
 
 ## Supported Tools
 

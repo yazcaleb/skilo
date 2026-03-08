@@ -1,5 +1,5 @@
 // Import skill from various sources
-import { readFile, mkdir, writeFile, rm, cp } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, rm, cp, stat } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdtemp } from 'node:fs/promises';
@@ -9,6 +9,13 @@ import { isRegistrySkillRef, normalizeSourceInput } from '../utils/source-kind.j
 import { findSkillFile } from '../utils/skill-file.js';
 import { type InstallOptions, describeInstallTargets, getInstallDestinations, getInstallDirs } from '../utils/install-targets.js';
 import { exitWithError, isJsonOutput, logInfo, logSuccess, printJson, printNote, printUsage } from '../utils/output.js';
+import {
+  discoverRepoSkills,
+  formatRepoSkillChoices,
+  isGitHubRepoLike,
+  normalizeGitHubSource,
+  selectRepoSkills,
+} from '../utils/repo-skills.js';
 
 export async function importCommand(source: string, options: InstallOptions = {}): Promise<void> {
   if (!source) {
@@ -18,6 +25,8 @@ export async function importCommand(source: string, options: InstallOptions = {}
       'Sources:',
       '  github:user/repo        Import from GitHub',
       '  github:user/repo#path   Import subfolder',
+      '  https://github.com/...  Import from a GitHub URL',
+      '  owner/repo --skill foo  Import a skill from a GitHub repo',
       '  ./path/to/skill.skl     Import from .skl file',
       '  /local/path             Import from local path',
       '  https://skilo.xyz/s/... Import from share link',
@@ -28,8 +37,9 @@ export async function importCommand(source: string, options: InstallOptions = {}
 
   try {
     source = normalizeSourceInput(source);
+    const prefersRepoSelection = Boolean(options.list || options.all || options.skill?.length);
 
-    if (await isRegistrySkillRef(source)) {
+    if (await isRegistrySkillRef(source) && !(prefersRepoSelection && isGitHubRepoLike(source))) {
       const { installCommand } = await import('./install.js');
       await installCommand(source, options);
       return;
@@ -37,8 +47,8 @@ export async function importCommand(source: string, options: InstallOptions = {}
 
     let skillPath: string;
 
-    if (source.startsWith('github:')) {
-      const imported = await importFromGitHub(source);
+    if (isGitHubRepoLike(source)) {
+      const imported = await importFromGitHub(normalizeGitHubSource(source));
       skillPath = imported.skillPath;
       cleanupPath = imported.cleanupPath;
     } else if (source.endsWith('.skl')) {
@@ -55,11 +65,59 @@ export async function importCommand(source: string, options: InstallOptions = {}
       cleanupPath = imported.cleanupPath;
     } else {
       // Local path
-      skillPath = await importFromLocalPath(source);
+      skillPath = await importFromLocalPath(source, prefersRepoSelection);
     }
 
-    // Install to skills directory
-    const installResult = await installSkill(skillPath, options);
+    const repoSkills = await discoverRepoSkills(skillPath);
+
+    if (options.list) {
+      if (isJsonOutput()) {
+        printJson({
+          command: 'import',
+          source,
+          mode: 'list',
+          skills: repoSkills.map((skill) => ({
+            id: skill.id,
+            name: skill.name,
+            description: skill.description,
+            relativeDir: skill.relativeDir,
+            source: skill.source,
+          })),
+        });
+      } else if (repoSkills.length === 0) {
+        logInfo('No skills found in source.');
+      } else {
+        logInfo(`Found ${repoSkills.length} skill${repoSkills.length === 1 ? '' : 's'}:`);
+        for (const line of formatRepoSkillChoices(repoSkills)) {
+          printNote('skill', line, 'primary');
+        }
+      }
+      return;
+    }
+
+    const selectedRepoSkills = selectRepoSkills(repoSkills, options);
+    const installResults = [];
+
+    if (selectedRepoSkills.length > 0) {
+      for (const selected of selectedRepoSkills) {
+        logInfo(`Installing ${selected.name}${selected.relativeDir === '.' ? '' : ` from ${selected.relativeDir}`}`);
+        installResults.push(await installSkill(selected.path, options));
+      }
+    } else {
+      if (repoSkills.length > 1 && !options.all && !(options.skill?.length)) {
+        exitWithError(
+          `Multiple skills found in source. Run "skilo import ${source} --list" to inspect them, or pass "--skill <name>" / "--all".`
+        );
+      }
+
+      if (options.skill?.length) {
+        exitWithError(
+          `Requested skill not found. Available: ${formatRepoSkillChoices(repoSkills).join(', ')}`
+        );
+      }
+
+      installResults.push(await installSkill(skillPath, options));
+    }
 
     logSuccess(`Imported from ${source}`);
 
@@ -67,9 +125,11 @@ export async function importCommand(source: string, options: InstallOptions = {}
       printJson({
         command: 'import',
         source,
-        installedSkill: installResult.name,
-        targets: installResult.targets,
-        installedDirs: installResult.installedDirs,
+        installedSkills: installResults.map((installResult) => ({
+          name: installResult.name,
+          targets: installResult.targets,
+          installedDirs: installResult.installedDirs,
+        })),
       });
     }
   } catch (e) {
@@ -99,7 +159,7 @@ async function importFromGitHub(source: string): Promise<{ skillPath: string; cl
   const response = await fetch(tarballUrl, {
     headers: {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'skilo-cli/1.0.10',
+      'User-Agent': 'skilo-cli/1.0.11',
     },
   });
 
@@ -239,9 +299,18 @@ async function importFromUrl(source: string): Promise<{ skillPath: string; clean
   return { skillPath: tempDir, cleanupPath: tempDir };
 }
 
-async function importFromLocalPath(source: string): Promise<string> {
+async function importFromLocalPath(source: string, allowRepoRoot = false): Promise<string> {
   const resolvedPath = resolve(source);
   logInfo(`Reading local skill ${resolvedPath}`);
+
+  const stats = await stat(resolvedPath).catch(() => null);
+  if (!stats) {
+    throw new Error(`Path not found: ${resolvedPath}`);
+  }
+
+  if (allowRepoRoot && stats.isDirectory()) {
+    return resolvedPath;
+  }
 
   // Validate SKILL.md exists
   if (!await findSkillFile(resolvedPath)) {

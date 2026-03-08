@@ -9,6 +9,7 @@ import * as crypto from 'node:crypto';
 import { isRegistrySkillRef, normalizeSourceInput } from '../utils/source-kind.js';
 import { type InstallOptions, describeInstallTargets, getInstallDirs, getInstallDestinations } from '../utils/install-targets.js';
 import { exitWithError, isJsonOutput, logInfo, logSuccess, printJson, printNote, printUsage } from '../utils/output.js';
+import { isGitHubRepoLike } from '../utils/repo-skills.js';
 
 function parseSkillRef(skill: string): { namespace: string; name: string; version?: string } {
   const parts = skill.split('@');
@@ -26,8 +27,9 @@ export async function installCommand(skill: string, options: InstallOptions = {}
 
   try {
     skill = normalizeSourceInput(skill);
+    const prefersRepoSelection = Boolean(options.list || options.all || options.skill?.length);
 
-    if (!await isRegistrySkillRef(skill)) {
+    if (!await isRegistrySkillRef(skill) || (prefersRepoSelection && isGitHubRepoLike(skill))) {
       const { importCommand } = await import('./import.js');
       await importCommand(skill, options);
       return;
