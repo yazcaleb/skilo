@@ -2,7 +2,7 @@
 
 > Share agent skills with a link. Publish and install SKILL.md files across Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, and OpenClaw.
 
-Skilo is a CLI and registry for sharing agent skills. Skills are directories containing a SKILL.md file with YAML frontmatter and markdown instructions. The CLI publishes skills to the registry and generates shareable links. Recipients install with one command. No account required.
+Skilo is a CLI and registry for sharing agent skills. Skills are directories containing a SKILL.md file with YAML frontmatter and markdown instructions. The CLI publishes skills to the registry and generates shareable links. Recipients install with one command. No account required, but `skilo login <username>` gives you a durable namespace.
 
 ## Start Here
 
@@ -14,10 +14,13 @@ If you are an agent and need to decide what to do:
 
 - Human bootstrap: `npx skilo-cli` (interactive runs install the global `skilo` binary after the first successful run)
 - Agent bootstrap: `npx skilo-cli --json`
+- Login: `skilo login <username>` or `skilo login --token sk_...`
 - Share a skill: `skilo share ./my-skill` → returns a link
+- Share defaults to unlisted for local sources; pass `--listed` to make the skill searchable too
 - Install a skill: `skilo add skilo.xyz/s/<token>` → downloads, verifies, installs
 - Create a pack: `skilo pack ./reviewer namespace/design-system --name "Starter pack"` → returns a pack link
 - Bulk share: `skilo share claude` → shares all skills from a tool at once
+- List your published skills: `skilo list --published`
 
 ## Common Inputs
 

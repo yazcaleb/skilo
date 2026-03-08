@@ -16,6 +16,8 @@ interface PackOptions {
   expires?: string;
   uses?: number;
   password?: boolean;
+  listed?: boolean;
+  unlisted?: boolean;
 }
 
 export async function packCommand(
@@ -41,6 +43,8 @@ async function createCuratedPack(sources: string[], options: PackOptions): Promi
       expires: options.expires,
       uses: options.uses,
       password: options.password,
+      listed: options.listed,
+      unlisted: options.unlisted ?? !options.listed,
     });
 
     if (tokens.has(result.token)) {

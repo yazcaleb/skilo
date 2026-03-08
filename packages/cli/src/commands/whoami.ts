@@ -1,15 +1,24 @@
 import { getClient } from '../api/client.js';
+import { exitWithError, isJsonOutput, printJson, printNote, printPrimary, printSection } from '../utils/output.js';
 
 export async function whoamiCommand(): Promise<void> {
   try {
     const client = await getClient();
     const user = await client.getCurrentUser();
-    console.log(`Username: ${user.username}`);
-    console.log(`Email: ${user.email}`);
-    console.log(`ID: ${user.id}`);
+
+    if (isJsonOutput()) {
+      printJson({
+        command: 'whoami',
+        user,
+      });
+      return;
+    }
+
+    printSection('Current user');
+    printPrimary(user.username);
+    printNote('email', user.email);
+    printNote('id', user.id);
   } catch (e) {
-    console.error(`Error: ${(e as Error).message}`);
-    console.log('Run "skilo login" to authenticate');
-    process.exit(1);
+    exitWithError(`${(e as Error).message}. Run "skilo login <username>" or "skilo login --token <api-key>".`);
   }
 }

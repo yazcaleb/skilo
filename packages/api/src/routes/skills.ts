@@ -180,12 +180,23 @@ skillsRouter.post('/', rateLimiters.publish, async (c) => {
       ).bind(skillId, name, namespace, description, version, privacy).run();
     }
 
-    // Create version record with signature if provided
-    const versionId = generateId();
-    await c.env.DB.prepare(
-      `INSERT INTO skill_versions (id, skill_id, version, tarball_url, size, checksumsha256, signature, public_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(versionId, skillId, version, r2Key, buffer.length, checksum, signature || null, publicKey || null).run();
+    const existingVersion = await c.env.DB.prepare(
+      `SELECT id FROM skill_versions WHERE skill_id = ? AND version = ?`
+    ).bind(skillId, version).first<{ id: string }>();
+
+    if (existingVersion) {
+      await c.env.DB.prepare(
+        `UPDATE skill_versions
+         SET tarball_url = ?, size = ?, checksumsha256 = ?, signature = ?, public_key = ?
+         WHERE id = ?`
+      ).bind(r2Key, buffer.length, checksum, signature || null, publicKey || null, existingVersion.id).run();
+    } else {
+      const versionId = generateId();
+      await c.env.DB.prepare(
+        `INSERT INTO skill_versions (id, skill_id, version, tarball_url, size, checksumsha256, signature, public_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(versionId, skillId, version, r2Key, buffer.length, checksum, signature || null, publicKey || null).run();
+    }
 
     return c.json({
       id: skillId,
@@ -359,7 +370,7 @@ skillsRouter.post('/share/:token/verify', async (c) => {
       return c.json({ error: 'not_found', message: 'Share link not found' }, 404);
     }
 
-    const passwordValid = await verifyPassword(password, share.password_hash);
+    const passwordValid = await verifyPassword(password, share.password_hash || '');
     if (!passwordValid) {
       return c.json({ error: 'unauthorized', message: 'Invalid password' }, 401);
     }

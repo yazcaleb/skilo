@@ -46,6 +46,8 @@ app.get('/', (c) => c.json({
     'resolve-packs',
     'publish-skills',
     'download-tarballs',
+    'username-bootstrap-auth',
+    'list-user-skills',
   ],
   supportedTools,
 }));
@@ -60,6 +62,9 @@ app.get('/v1', (c) => c.json({
     getSkill: '/v1/skills/:namespace/:name',
     resolveShare: '/v1/skills/share/:token',
     resolvePack: '/v1/packs/:token',
+    cliLogin: '/v1/auth/cli-login',
+    currentUser: '/v1/user',
+    userSkills: '/v1/user/skills',
   },
   supportedTools,
 }));

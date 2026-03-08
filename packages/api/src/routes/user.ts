@@ -54,14 +54,19 @@ userRouter.get('/skills', authenticate, async (c) => {
 
   try {
     const stmt = await c.env.DB.prepare(
-      `SELECT name, namespace, description, latest_version as version, created_at
+      `SELECT name, namespace, description, latest_version as version, privacy, created_at, updated_at
        FROM skills
        WHERE namespace = ?
        ORDER BY updated_at DESC`
     );
     const skills = await stmt.bind(user.username).all();
 
-    return c.json({ skills: skills.results || [] });
+    return c.json({
+      skills: (skills.results || []).map((skill: any) => ({
+        ...skill,
+        listed: skill.privacy === 'public',
+      })),
+    });
   } catch (e) {
     return c.json({ error: 'fetch_failed', message: (e as Error).message }, 500);
   }

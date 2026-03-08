@@ -15,6 +15,8 @@ $ skilo pack ./code-reviewer flrabbit/original-landing-page-builder --name "Star
 
 No account required. Skills are published anonymously by default. You can claim them later with `skilo claim`.
 
+Want a real namespace? Run `skilo login yaz` once. That creates a publishing identity and stores an API key locally. Use `skilo login --token sk_...` to restore an existing account.
+
 Agents should prefer `npx skilo-cli --json` or `https://skilo.xyz/llms.txt`.
 
 ## CLI commands
@@ -27,6 +29,9 @@ Create a shareable link for a local skill directory. Publishes the skill and ret
 - `--expires 2h` — auto-expire after a duration (m, h, d)
 - `--uses 5` — limit total downloads
 - `--password` — require a password to access
+- `--listed` — make the underlying skill public and searchable first
+
+`skilo share` is transfer-first. Local shares default to unlisted even when you're logged in.
 
 ### `skilo share <tool>`
 
@@ -52,6 +57,20 @@ Tool names also work as local sources. Examples:
 ### `skilo publish`
 
 Publish the current directory to the registry. Reads SKILL.md for metadata.
+
+- `--listed` — publish publicly under your namespace
+- `--unlisted` — publish direct-link only
+
+### `skilo login <username>`
+
+Create a publishing identity with a username and save an API key locally.
+
+- `skilo login yaz`
+- `skilo login --token sk_...`
+
+### `skilo list --published`
+
+List skills under your logged-in namespace, including public vs unlisted visibility.
 
 ### `skilo search <query>`
 

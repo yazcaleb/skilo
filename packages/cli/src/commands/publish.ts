@@ -11,6 +11,32 @@ import { loadOrGenerateKeys, sign, encodeBase64Url } from '../utils/signing.js';
 import { readSkillContent } from '../utils/skill-file.js';
 import { blankLine, exitWithError, logSuccess, logWarn, printNote, printPrimary, printSection } from '../utils/output.js';
 
+interface PublishOptions {
+  sign?: boolean;
+  listed?: boolean;
+  unlisted?: boolean;
+}
+
+function resolvePublishVisibility(options: PublishOptions | undefined, authenticated: boolean, defaultWhenAuthenticated: 'listed' | 'unlisted'): boolean {
+  if (options?.listed && options?.unlisted) {
+    throw new Error('Choose either --listed or --unlisted, not both.');
+  }
+
+  if (options?.listed && !authenticated) {
+    throw new Error('Listed publish requires "skilo login".');
+  }
+
+  if (options?.listed) {
+    return true;
+  }
+
+  if (options?.unlisted) {
+    return false;
+  }
+
+  return authenticated && defaultWhenAuthenticated === 'listed';
+}
+
 async function createTarball(cwd: string, skillFile: string): Promise<{ buffer: Buffer; checksum: string }> {
   const tempDir = await mkdtemp(join(tmpdir(), 'skilo-publish-'));
   const tempFile = join(tempDir, 'skill.tgz');
@@ -29,7 +55,7 @@ async function createTarball(cwd: string, skillFile: string): Promise<{ buffer: 
   return { buffer, checksum };
 }
 
-export async function publishCommand(path?: string, options?: { sign?: boolean }): Promise<void> {
+export async function publishCommand(path?: string, options?: PublishOptions): Promise<void> {
   try {
     const { manifest, namespace, claimToken, isListed } = await publishLocalSkill(path, options);
     const version = manifest.version || '0.1.0';
@@ -42,11 +68,11 @@ export async function publishCommand(path?: string, options?: { sign?: boolean }
       blankLine();
       printSection('Claim this skill');
       printNote('claim token', claimToken);
-      printNote('step 1', 'skilo login');
+      printNote('step 1', 'skilo login your-name');
       printNote('step 2', `skilo claim @${namespace}/${manifest.name} --token ${claimToken}`);
-    } else if (isListed) {
-      printNote('visibility', 'public');
     }
+
+    printNote('visibility', isListed ? 'public' : 'unlisted');
   } catch (e) {
     exitWithError(`Publish failed: ${(e as Error).message}`);
   }
@@ -54,7 +80,7 @@ export async function publishCommand(path?: string, options?: { sign?: boolean }
 
 export async function publishLocalSkill(
   path?: string,
-  options?: { sign?: boolean }
+  options?: PublishOptions
 ): Promise<{
   manifest: NonNullable<ReturnType<typeof validateSkillContent>['manifest']>;
   namespace: string;
@@ -92,8 +118,15 @@ export async function publishLocalSkill(
   let namespace: string;
   let claimToken: string | undefined;
 
-  if (config.token || config.apiKey) {
-    namespace = config.namespace || 'default';
+  const authenticated = Boolean(config.token || config.apiKey);
+
+  if (authenticated) {
+    if (config.namespace) {
+      namespace = config.namespace;
+    } else {
+      const user = await client.getCurrentUser();
+      namespace = user.username;
+    }
   } else {
     namespace = generateAnonName();
     claimToken = generateClaimToken();
@@ -108,7 +141,7 @@ export async function publishLocalSkill(
     }
   }
 
-  const isListed = !!(config.token || config.apiKey);
+  const isListed = resolvePublishVisibility(options, authenticated, 'listed');
 
   await client.publishSkill(
     manifest.name,

@@ -72,7 +72,7 @@ function ClaimPage() {
             Log in first to create your namespace:
           </p>
           <code className="rounded bg-stone-100 px-3 py-2 font-mono text-[13px] w-fit">
-            skilo login
+            skilo login your-name
           </code>
           <p className="text-stone-500">
             After logging in, you can also publish directly under your namespace without the anonymous claim flow.

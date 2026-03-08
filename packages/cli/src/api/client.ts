@@ -7,7 +7,9 @@ import type {
   PackData,
   AuthToken,
   ApiKey,
+  CliLoginResponse,
   User,
+  UserSkill,
   Config,
 } from '../types.js';
 
@@ -43,7 +45,7 @@ export class ApiClient {
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'User-Agent': 'skilo-cli/1.0.14',
+      'User-Agent': 'skilo-cli/1.0.15',
     };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -134,7 +136,7 @@ export class ApiClient {
     const res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
-        'User-Agent': 'skilo-cli/1.0.14',
+        'User-Agent': 'skilo-cli/1.0.15',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
       body: formData,
@@ -162,6 +164,22 @@ export class ApiClient {
     return res.json();
   }
 
+  async bootstrapCliLogin(username: string, email?: string): Promise<CliLoginResponse> {
+    const url = `${this.baseUrl}/v1/auth/cli-login`;
+    const res = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ username, email }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `Login failed: ${res.status} ${res.statusText}`);
+    }
+
+    return res.json();
+  }
+
   async getCurrentUser(): Promise<User> {
     const url = `${this.baseUrl}/v1/user`;
     const res = await fetchWithRetry(url, { headers: this.getHeaders() });
@@ -171,6 +189,18 @@ export class ApiClient {
     }
 
     return res.json();
+  }
+
+  async getUserSkills(): Promise<UserSkill[]> {
+    const url = `${this.baseUrl}/v1/user/skills`;
+    const res = await fetchWithRetry(url, { headers: this.getHeaders() });
+
+    if (!res.ok) {
+      throw new Error(`Get skills failed: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json() as UserSkill[] | { skills?: UserSkill[] };
+    return Array.isArray(data) ? data : data.skills || [];
   }
 
   async getToken(clientId: string, clientSecret: string): Promise<AuthToken> {
@@ -321,7 +351,7 @@ export async function loadConfig(): Promise<CliConfig> {
   }
 }
 
-export async function saveConfig(config: Config): Promise<void> {
+export async function saveConfig(config: CliConfig): Promise<void> {
   await mkdir(CONFIG_DIR, { recursive: true });
   await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
 }

@@ -6,6 +6,17 @@ import { isKnownTool, discoverSkills, resolveToolName } from '../tool-dirs.js';
 import { pickSkills } from '../utils/picker.js';
 import { blankLine, exitWithError, isJsonOutput, logError, logInfo, logSuccess, printJson, printNote, printPrimary, printSection, printUsage } from '../utils/output.js';
 
+interface ShareOptions {
+  oneTime?: boolean;
+  expires?: string;
+  uses?: number;
+  password?: boolean;
+  qr?: boolean;
+  yes?: boolean;
+  listed?: boolean;
+  unlisted?: boolean;
+}
+
 function parseSkillRef(skill: string): { namespace: string; name: string } {
   const parts = skill.split('/');
   if (parts.length !== 2) {
@@ -40,7 +51,7 @@ async function promptPassword(): Promise<string> {
 
 export async function shareCommand(
   skill: string,
-  options: { oneTime?: boolean; expires?: string; uses?: number; password?: boolean; qr?: boolean; yes?: boolean } = {}
+  options: ShareOptions = {}
 ): Promise<void> {
   if (isKnownTool(skill)) {
     await bulkShareCommand(resolveToolName(skill) || skill, options);
@@ -54,7 +65,10 @@ export async function shareCommand(
   }
 
   try {
-    const target = await resolveShareTarget(skill);
+    const target = await resolveShareTarget(skill, {
+      listed: options.listed,
+      unlisted: options.unlisted ?? !options.listed,
+    });
     const client = await getClient();
 
     // Parse expires
@@ -89,6 +103,7 @@ export async function shareCommand(
 
     if (target.publishedVersion) {
       logSuccess(`Published @${target.namespace}/${target.name}@${target.publishedVersion}`);
+      printNote('visibility', options.listed ? 'public' : 'unlisted');
     }
 
     logSuccess(`Share link ready for ${target.namespace}/${target.name}`);
@@ -141,7 +156,7 @@ function generateQRCode(url: string): string {
 
 async function bulkShareCommand(
   toolName: string,
-  options: { oneTime?: boolean; expires?: string; uses?: number; password?: boolean; qr?: boolean; yes?: boolean }
+  options: ShareOptions
 ): Promise<void> {
   logInfo(`Scanning ${toolName === 'all' ? 'all tools' : toolName} for skills`);
 
@@ -200,7 +215,10 @@ async function bulkShareCommand(
     logInfo(`[${i + 1}/${total}] ${skill.name}`);
 
     try {
-      const { manifest, namespace } = await publishLocalSkill(skill.path);
+      const { manifest, namespace } = await publishLocalSkill(skill.path, {
+        listed: options.listed,
+        unlisted: options.unlisted ?? !options.listed,
+      });
       const result = await client.createShareLink(
         namespace,
         manifest.name,
@@ -274,7 +292,10 @@ async function bulkShareCommand(
   }
 }
 
-async function resolveShareTarget(skill: string): Promise<{ namespace: string; name: string; publishedVersion?: string }> {
+async function resolveShareTarget(
+  skill: string,
+  options: { listed?: boolean; unlisted?: boolean } = {}
+): Promise<{ namespace: string; name: string; publishedVersion?: string }> {
   try {
     await resolveSkillLocation(skill);
   } catch (e) {
@@ -287,7 +308,10 @@ async function resolveShareTarget(skill: string): Promise<{ namespace: string; n
     throw e;
   }
 
-  const { manifest, namespace } = await publishLocalSkill(skill);
+  const { manifest, namespace } = await publishLocalSkill(skill, {
+    listed: options.listed,
+    unlisted: options.unlisted ?? !options.listed,
+  });
   return {
     namespace,
     name: manifest.name,
@@ -297,7 +321,7 @@ async function resolveShareTarget(skill: string): Promise<{ namespace: string; n
 
 export async function ensureShareLinkForSource(
   source: string,
-  options: { oneTime?: boolean; expires?: string; uses?: number; password?: boolean } = {}
+  options: { oneTime?: boolean; expires?: string; uses?: number; password?: boolean; listed?: boolean; unlisted?: boolean } = {}
 ): Promise<{ token: string; url: string; namespace?: string; name?: string; created: boolean }> {
   const existingShareToken = parseShareToken(source);
   if (existingShareToken) {
@@ -336,7 +360,10 @@ export async function ensureShareLinkForSource(
     password = await promptPassword();
   }
 
-  const target = await resolveShareTarget(source);
+  const target = await resolveShareTarget(source, {
+    listed: options.listed,
+    unlisted: options.unlisted,
+  });
   const result = await client.createShareLink(
     target.namespace,
     target.name,

@@ -97,11 +97,28 @@ export interface ApiKey {
   createdAt: number;
 }
 
+export interface CliLoginResponse {
+  created: boolean;
+  user: User;
+  apiKey: ApiKey;
+}
+
 export interface User {
   id: string;
   username: string;
   email: string;
   createdAt: number;
+}
+
+export interface UserSkill {
+  name: string;
+  namespace: string;
+  description: string;
+  version: string;
+  privacy: 'public' | 'unlisted' | 'org_private';
+  listed: boolean;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface Config {

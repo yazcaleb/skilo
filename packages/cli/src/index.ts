@@ -5,6 +5,7 @@ import { validateCommand } from './commands/validate.js';
 import { packCommand } from './commands/pack.js';
 import { initCommand } from './commands/init.js';
 import { loginCommand } from './commands/login.js';
+import { logoutCommand } from './commands/logout.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { searchCommand } from './commands/search.js';
 import { infoCommand } from './commands/info.js';
@@ -48,7 +49,7 @@ function addInstallTargetOptions(command: Command): Command {
 program
   .name('skilo')
   .description('Share agent skills with a link. No repo required.')
-  .version('1.0.14');
+  .version('1.0.15');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);
@@ -71,15 +72,26 @@ Compatibility aliases:
 `);
 
 // Auth (optional)
-program.command('login').description('Login to publish skills').action(loginCommand);
-program.command('logout').description('Logout').action(() => console.log('Logged out'));
+program
+  .command('login [username]')
+  .description('Create or restore a publishing identity')
+  .option('--token <apiKey>', 'Use an existing API key')
+  .option('--email <email>', 'Set an email while creating a new username')
+  .option('--force', 'Replace the current login')
+  .action(loginCommand);
+program.command('logout').description('Clear saved authentication').action(logoutCommand);
 program.command('whoami').description('Show current user').action(whoamiCommand);
 
 // Discovery
 program.command('search <query>').description('Search skills').action(searchCommand);
 program.command('info <skill>').description('Show skill info').action(infoCommand);
 program.command('cat <skill>').description('View skill before installing').action(catCommand);
-program.command('list').description('List installed skills').action(listCommand);
+program
+  .command('list')
+  .description('List project skills, tool skills, or your published skills')
+  .option('--published', 'List skills under your logged-in namespace')
+  .option('--tool <tool>', 'List skills discovered in a supported tool')
+  .action(listCommand);
 
 // Package management
 addInstallTargetOptions(
@@ -112,6 +124,8 @@ program
   .command('publish [path]')
   .description('Publish skill (default: .)')
   .option('--sign', 'Sign the skill bundle')
+  .option('--listed', 'Make the skill public and searchable')
+  .option('--unlisted', 'Keep the skill off search and direct-link only')
   .action(publishCommand);
 program.command('unpublish <skill>').description('Remove a skill').action((s) => {
   console.log('Use: skilo yank namespace/name@version to remove specific versions');
@@ -143,6 +157,8 @@ program
   .option('--expires <time>', 'Expires in (e.g., 1h, 2d)')
   .option('--uses <n>', 'Max uses')
   .option('--password', 'Password protect')
+  .option('--listed', 'Make locally published share sources public before linking')
+  .option('--unlisted', 'Keep locally published share sources off search (default)')
   .action(shareCommand);
 
 // Trust & Ops
@@ -167,6 +183,8 @@ program
   .option('--expires <time>', 'Expires in (e.g., 1h, 2d)')
   .option('--uses <n>', 'Max uses for generated share links')
   .option('--password', 'Password protect generated share links')
+  .option('--listed', 'Make locally published pack sources public before linking')
+  .option('--unlisted', 'Keep locally published pack sources off search (default)')
   .action((sources, options) => packCommand(sources, options));
 
 function printInteractiveWelcome(): void {

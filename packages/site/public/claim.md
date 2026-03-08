@@ -21,7 +21,7 @@ Replace the namespace, skill name, and token with your values.
 Log in first to create your namespace:
 
 ```
-skilo login
+skilo login your-name
 ```
 
 After logging in, you can also publish directly under your namespace without the anonymous claim flow.

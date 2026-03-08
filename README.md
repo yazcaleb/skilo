@@ -66,6 +66,30 @@ skilo share ./my-skill --uses 5
 
 # Password protected
 skilo share ./my-skill --password
+
+# Make the underlying skill public before creating the share link
+skilo share ./my-skill --listed
+```
+
+`skilo share` is transfer-first. Local shares default to unlisted even when you're logged in. Pass `--listed` if you want the skill to be searchable too.
+
+### Login and publish
+
+```bash
+# Create a publishing identity
+skilo login yaz
+
+# Restore an existing account with an API key
+skilo login --token sk_...
+
+# Publish publicly under your namespace
+skilo publish --listed
+
+# Publish direct-link only
+skilo publish --unlisted
+
+# List what you've published
+skilo list --published
 ```
 
 ### Install a skill
@@ -153,6 +177,8 @@ skilo inspect https://skilo.xyz/s/a3xK9mP2 --json
 | `skilo sync [source] [targets...]` | Sync local project skills or copy skills between tools |
 | `skilo pack [sources...]` | Create a .tgz bundle or a curated shareable pack |
 | `skilo publish [path]` | Publish to the registry |
+| `skilo login [username]` | Create or restore a publishing identity |
+| `skilo list --published` | List skills under your namespace |
 | `skilo init [name]` | Create a new skill |
 | `skilo validate` | Validate SKILL.md |
 
@@ -166,6 +192,7 @@ Pack options for `pack [sources...]`:
 
 - `--name <name>` set the pack title
 - `--one-time`, `--expires`, `--uses`, `--password` apply to generated share links for local/ref sources
+- `--listed`, `--unlisted` control visibility for locally published pack sources
 
 ## Agent-Friendly Usage
 

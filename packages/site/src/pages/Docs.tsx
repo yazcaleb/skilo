@@ -78,6 +78,9 @@ function Docs() {
             No account required. Skills are published anonymously by default. You can claim them later with <Code>skilo claim</Code>.
           </p>
           <p className="text-stone-500">
+            Want a real namespace? Run <Code copy>skilo login yaz</Code> once. Use <Code copy>skilo login --token sk_...</Code> to restore an existing account.
+          </p>
+          <p className="text-stone-500">
             Agents should prefer <Code copy>npx skilo-cli --json</Code> or <Code copy>https://skilo.xyz/llms.txt</Code>.
           </p>
         </section>
@@ -99,7 +102,11 @@ function Docs() {
                 <li><Code>--expires 2h</Code> &mdash; auto-expire after a duration (m, h, d)</li>
                 <li><Code>--uses 5</Code> &mdash; limit total downloads</li>
                 <li><Code>--password</Code> &mdash; require a password to access</li>
+                <li><Code>--listed</Code> &mdash; make the underlying skill public before linking.</li>
               </ul>
+              <p className="text-stone-500 text-sm mt-1">
+                Local shares default to unlisted even when you are logged in.
+              </p>
             </div>
 
             <div>
@@ -144,6 +151,28 @@ function Docs() {
               </p>
               <p className="text-stone-500 text-sm mt-1">
                 Publish the current directory to the registry. Reads SKILL.md for metadata.
+              </p>
+              <ul className="text-stone-500 text-sm list-disc pl-5 mt-1 flex flex-col gap-0.5">
+                <li><Code>--listed</Code> &mdash; publish publicly under your namespace.</li>
+                <li><Code>--unlisted</Code> &mdash; keep the skill off search.</li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-sm">
+                <Code>skilo login &lt;username&gt;</Code>
+              </p>
+              <p className="text-stone-500 text-sm mt-1">
+                Create a publishing identity and save an API key locally. You can also restore with <Code>skilo login --token sk_...</Code>.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm">
+                <Code>skilo list --published</Code>
+              </p>
+              <p className="text-stone-500 text-sm mt-1">
+                List skills under your logged-in namespace, including public vs unlisted visibility.
               </p>
             </div>
 

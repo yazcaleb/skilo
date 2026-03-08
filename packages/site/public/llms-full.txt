@@ -2,7 +2,7 @@
 
 > Share agent skills with a link. Publish and install SKILL.md files across Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, and OpenClaw.
 
-Skilo is a CLI and registry for sharing agent skills. Skills are directories containing a SKILL.md file with YAML frontmatter and markdown instructions. The CLI publishes skills to the registry and generates shareable links. Recipients install with one command. No account required.
+Skilo is a CLI and registry for sharing agent skills. Skills are directories containing a SKILL.md file with YAML frontmatter and markdown instructions. The CLI publishes skills to the registry and generates shareable links. Recipients install with one command. No account required, but `skilo login <username>` gives you a durable namespace.
 
 ## Quick start
 
@@ -15,7 +15,7 @@ $ skilo pack ./code-reviewer flrabbit/original-landing-page-builder --name "Star
 → skilo.xyz/p/abc123
 ```
 
-No account required. Skills are published anonymously by default. You can claim them later with `skilo claim`.
+No account required. Skills are published anonymously by default. You can claim them later with `skilo claim`, or create a namespace up front with `skilo login yaz`.
 
 For humans, the first successful interactive `npx skilo-cli ...` run also installs the global `skilo` binary.
 For agents, prefer `npx skilo-cli --json` and parse the structured output.
@@ -30,6 +30,9 @@ Create a shareable link for a local skill directory. Publishes the skill and ret
 - `--expires 2h` — auto-expire after a duration (m, h, d)
 - `--uses 5` — limit total downloads
 - `--password` — require a password to access
+- `--listed` — make the underlying skill public before linking
+
+`skilo share` is transfer-first. Local shares default to unlisted even when you are logged in.
 
 ### `skilo share <tool>`
 
@@ -63,6 +66,20 @@ Install targets (flags):
 ### `skilo publish`
 
 Publish the current directory to the registry. Reads SKILL.md for metadata.
+
+- `--listed` — publish publicly under your namespace
+- `--unlisted` — publish direct-link only
+
+### `skilo login <username>`
+
+Create a publishing identity with a username and save an API key locally.
+
+- `skilo login yaz`
+- `skilo login --token sk_...`
+
+### `skilo list --published`
+
+List skills under your logged-in namespace, including public vs unlisted visibility.
 
 ### `skilo search <query>`
 
@@ -127,6 +144,12 @@ When you publish a skill anonymously, you get a claim token. Use it to take owne
 skilo claim @namespace/skill-name --token YOUR_TOKEN
 ```
 
+Log in with:
+
+```
+skilo login your-name
+```
+
 ## Supported tools
 
 Skilo discovers skills from these directories:
@@ -151,6 +174,9 @@ Skilo discovers skills from these directories:
 - Skill tarball: `GET /v1/skills/:namespace/:name/tarball/:version` → gzipped tar containing SKILL.md
 - Resolve pack: `GET /v1/packs/:token` → `{ name, token, skills[] }`
 - Create pack: `POST /v1/packs` with `{ name, share_tokens[] }` → `{ token, url, count }`
+- CLI login bootstrap: `POST /v1/auth/cli-login` with `{ username, email? }` → `{ user, apiKey }`
+- Current user: `GET /v1/user` → authenticated user
+- My skills: `GET /v1/user/skills` → skills under the authenticated namespace
 
 ## Links
 

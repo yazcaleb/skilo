@@ -4,6 +4,122 @@ import type { Env } from '../index.js';
 
 export const authRouter = new Hono<{ Bindings: Env }>();
 
+type CliLoginBody = {
+  username?: string;
+  email?: string;
+};
+
+function normalizeUsername(input: unknown): string {
+  if (typeof input !== 'string') {
+    return '';
+  }
+
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function isValidUsername(username: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(username);
+}
+
+function normalizeEmail(input: unknown, username: string): string {
+  if (typeof input === 'string' && input.trim().length > 0) {
+    return input.trim().toLowerCase();
+  }
+
+  return `${username}@users.skilo.local`;
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.endsWith('@users.skilo.local');
+}
+
+// Frictionless CLI account bootstrap: claim a new username and receive an API key.
+authRouter.post('/cli-login', async (c) => {
+  const body = await c.req.json<CliLoginBody>().catch(() => ({} as CliLoginBody));
+  const username = normalizeUsername(body.username);
+
+  if (!isValidUsername(username)) {
+    return c.json({
+      error: 'invalid_username',
+      message: 'Username must be 3-32 characters and use lowercase letters, numbers, or hyphens.',
+    }, 400);
+  }
+
+  const email = normalizeEmail(body.email, username);
+  if (!isValidEmail(email)) {
+    return c.json({
+      error: 'invalid_email',
+      message: 'Email must be valid if provided.',
+    }, 400);
+  }
+
+  try {
+    const existingByUsername = await c.env.DB.prepare(
+      'SELECT id, username FROM users WHERE username = ?'
+    ).bind(username).first<{ id: string; username: string }>();
+
+    if (existingByUsername) {
+      return c.json({
+        error: 'username_taken',
+        message: 'Username already exists. Use your saved API key with "skilo login --token <key>" or choose another username.',
+      }, 409);
+    }
+
+    const existingByEmail = await c.env.DB.prepare(
+      'SELECT id, email FROM users WHERE email = ?'
+    ).bind(email).first<{ id: string; email: string }>();
+
+    if (existingByEmail) {
+      return c.json({
+        error: 'email_taken',
+        message: 'Email already exists. Use your saved API key with "skilo login --token <key>" or provide another email.',
+      }, 409);
+    }
+
+    const userId = generateId();
+    const keyId = generateId();
+    const apiKey = `sk_${generateToken()}`;
+    const keyHash = hashKey(apiKey);
+    const createdAt = Math.floor(Date.now() / 1000);
+
+    await c.env.DB.prepare(
+      `INSERT INTO users (id, username, email, created_at)
+       VALUES (?, ?, ?, ?)`
+    ).bind(userId, username, email, createdAt).run();
+
+    await c.env.DB.prepare(
+      `INSERT INTO api_keys (id, user_id, key_hash, permissions, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(keyId, userId, keyHash, 'write', createdAt).run();
+
+    await c.env.SKILLPACK_KV.put(`key:${keyHash}`, userId, { expirationTtl: 86400 * 365 * 10 });
+
+    return c.json({
+      created: true,
+      user: {
+        id: userId,
+        username,
+        email,
+        createdAt,
+      },
+      apiKey: {
+        id: keyId,
+        key: apiKey,
+        permissions: 'write',
+        createdAt,
+      },
+    }, 201);
+  } catch (e) {
+    return c.json({ error: 'login_failed', message: (e as Error).message }, 500);
+  }
+});
+
 // OAuth token endpoint (Client Credentials)
 authRouter.post('/token', async (c) => {
   const body = await c.req.json();
@@ -24,7 +140,7 @@ authRouter.post('/token', async (c) => {
        JOIN oauth_clients c ON u.id = c.user_id
        WHERE c.client_id = ? AND c.client_secret_hash = ?`
     );
-    const client = await stmt.bind(client_id, hashSecret(client_secret)).first();
+    const client = await stmt.bind(client_id, hashSecret(client_secret)).first<{ id: string }>();
 
     if (!client) {
       return c.json({ error: 'invalid_client' }, 401);
