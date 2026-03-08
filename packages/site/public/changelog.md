@@ -4,17 +4,18 @@
 
 ## 2026-03-09
 
-### Added
-
-- Support GitHub repo path shorthand sources (`bb29f88`)
-
 ### Changed
 
+- Tighten API auth typing and site headers (`30c910c`)
 - Polish bulk skill sharing flow (`a9b7b0b`)
 - Strengthen skill auditing and refresh stale trust (`a3fc190`)
 - Tighten transfer flows and share semantics (`a97b5c8`)
 - Restore minimal landing flow (`a07afed`)
 - Build unified catalog, profiles, and pack tray (`e778ee1`)
+
+### Added
+
+- Support GitHub repo path shorthand sources (`bb29f88`)
 
 ## 2026-03-08
 
