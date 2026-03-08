@@ -4,6 +4,26 @@
 
 ## 2026-03-08
 
+### Added
+
+- Add first-class curated skill packs (`c33436b`)
+- Add Vercel-style repo skill compatibility (`89cce5f`)
+- Add syntax highlighting for code blocks (`81c267c`)
+- Add auto-generated changelog page (`7daab58`)
+- Add supported tool icons to landing page (`0c967e6`)
+- Add llmstxt.org-compatible markdown for all pages (`9cfcf4e`)
+- Add emerald accent to logo, fix favicon/OG/metadata (`d8516df`)
+- Add llms.txt and official Skilo skill (`e92d686`)
+- Support native installs for all tools (`70273cd`)
+- Add explicit agent install targets (`abefba0`)
+- Support share URLs and refs in add/import (`c56b5a2`)
+- Add skill packs and scope CLI package (`8e440aa`)
+- Add comprehensive README with install docs (`6f3d192`)
+- Add Skilo v2: web presence, enhanced sharing, import/export, signing (`1dbfbc8`)
+- Add short memorable anon names (2-letter prefix + noun) (`4b5bb0b`)
+- Add anon publishing with claim tokens (`07cd2ce`)
+- Add publishing lifecycle, trust & ops commands (`5406ccf`)
+
 ### Changed
 
 - Extract shared Layout for consistent header/footer (`a101bed`)
@@ -24,22 +44,6 @@
 - Update site with npm install instructions (`e24419b`)
 - Publish skilo-cli@1.0.0 to npm (`4d151cf`)
 - Prepare cli package for npm publish (`1fdfdbd`)
-
-### Added
-
-- Add supported tool icons to landing page (`0c967e6`)
-- Add llmstxt.org-compatible markdown for all pages (`9cfcf4e`)
-- Add emerald accent to logo, fix favicon/OG/metadata (`d8516df`)
-- Add llms.txt and official Skilo skill (`e92d686`)
-- Support native installs for all tools (`70273cd`)
-- Add explicit agent install targets (`abefba0`)
-- Support share URLs and refs in add/import (`c56b5a2`)
-- Add skill packs and scope CLI package (`8e440aa`)
-- Add comprehensive README with install docs (`6f3d192`)
-- Add Skilo v2: web presence, enhanced sharing, import/export, signing (`1dbfbc8`)
-- Add short memorable anon names (2-letter prefix + noun) (`4b5bb0b`)
-- Add anon publishing with claim tokens (`07cd2ce`)
-- Add publishing lifecycle, trust & ops commands (`5406ccf`)
 
 ### Removed
 
