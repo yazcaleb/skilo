@@ -1,5 +1,6 @@
 // API client for skilo site
-const API_BASE = 'https://api.skilo.dev';
+const viteEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+const API_BASE = viteEnv?.VITE_API_BASE || 'https://api.skilo.dev';
 
 export interface SkillMetadata {
   name: string;
@@ -68,6 +69,7 @@ export const api = {
       body: JSON.stringify({ password }),
     });
     if (!res.ok) throw new Error('Invalid password');
-    return res.json();
+    const data = await res.json() as { skill: SkillMetadata };
+    return data.skill;
   },
 };

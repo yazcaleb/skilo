@@ -1,7 +1,8 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Package, ArrowLeft, FileText, Shield } from 'lucide-react';
+import { Package, ArrowLeft, FileText, Shield, Lock, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { api } from '../api/skilo';
 import TrustBadge from '../components/TrustBadge';
 import InstallBtn from '../components/InstallBtn';
 import type { SkillMetadata } from '../api/skilo';
@@ -9,34 +10,32 @@ import type { SkillMetadata } from '../api/skilo';
 function SkillPage() {
   const { token } = useParams<{ token: string }>();
   const [skill, setSkill] = useState<SkillMetadata | null>(null);
+  const [password, setPassword] = useState('');
+  const [requiresPassword, setRequiresPassword] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // For now, simulate loading from API
-    // In production, this would fetch from api.skilo.dev
     const fetchSkill = async () => {
+      if (!token) {
+        setError('Invalid share link');
+        setLoading(false);
+        return;
+      }
+
       try {
-        // Mock data for demonstration
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setSkill({
-          name: 'example-skill',
-          namespace: 'anonymous',
-          description: 'An example skill demonstrating the Skilo platform.',
-          version: '1.0.0',
-          author: null,
-          homepage: null,
-          repository: null,
-          keywords: ['example', 'demo'],
-          tarballUrl: '',
-          size: 1024,
-          checksum: 'sha256:abc123...',
-          listed: false,
-          createdAt: Date.now() / 1000,
-          updatedAt: Date.now() / 1000,
-        });
+        const data = await api.resolveShare(token);
+        if (data.requiresPassword) {
+          setRequiresPassword(true);
+          setSkill(null);
+          return;
+        }
+
+        setRequiresPassword(false);
+        setSkill(data.skill);
       } catch (e) {
-        setError('Failed to load skill');
+        setError(e instanceof Error ? e.message : 'Failed to load skill');
       } finally {
         setLoading(false);
       }
@@ -44,6 +43,27 @@ function SkillPage() {
 
     fetchSkill();
   }, [token]);
+
+  const handleVerifyPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!token) {
+      setError('Invalid share link');
+      return;
+    }
+
+    try {
+      setVerifying(true);
+      setError(null);
+      const verifiedSkill = await api.verifySharePassword(token, password);
+      setSkill(verifiedSkill);
+      setRequiresPassword(false);
+      setPassword('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Invalid password');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -54,6 +74,45 @@ function SkillPage() {
   }
 
   if (error || !skill) {
+    if (requiresPassword) {
+      return (
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 rounded-full bg-skilo-100 dark:bg-skilo-900/30 flex items-center justify-center mx-auto mb-4">
+                <Lock className="w-8 h-8 text-skilo-600 dark:text-skilo-400" />
+              </div>
+              <h1 className="text-2xl font-bold mb-2">Password protected</h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Enter the password to access this skill.
+              </p>
+            </div>
+
+            <form onSubmit={handleVerifyPassword} className="space-y-4">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-skilo-500 focus:border-transparent outline-none"
+              />
+              {error && (
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              )}
+              <button
+                type="submit"
+                disabled={verifying || password.length === 0}
+                className="w-full px-4 py-3 bg-skilo-600 hover:bg-skilo-700 disabled:opacity-60 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                {verifying ? 'Checking...' : 'Continue'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -119,6 +178,7 @@ function SkillPage() {
             skillId={skill.namespace + '/' + skill.name}
             namespace={skill.namespace}
             name={skill.name}
+            command={`npx skilo-cli import https://skilo.xyz/s/${token}`}
           />
         </div>
 

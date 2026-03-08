@@ -12,6 +12,10 @@ import type {
 
 const DEFAULT_API_URL = 'https://api.skilo.dev';
 
+function resolveBaseUrl(configBaseUrl?: string): string {
+  return process.env.SKILO_API_BASE_URL || configBaseUrl || DEFAULT_API_URL;
+}
+
 export interface ClientConfig {
   baseUrl: string;
   token?: string;
@@ -27,7 +31,7 @@ export class ApiClient {
   private token?: string;
 
   constructor(config: ClientConfig) {
-    this.baseUrl = config.baseUrl || DEFAULT_API_URL;
+    this.baseUrl = resolveBaseUrl(config.baseUrl);
     this.token = config.token;
   }
 
@@ -38,7 +42,7 @@ export class ApiClient {
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'User-Agent': 'skilo-cli/1.0.1',
+      'User-Agent': 'skilo-cli/1.0.2',
     };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -54,7 +58,8 @@ export class ApiClient {
       throw new Error(`Search failed: ${res.status} ${res.statusText}`);
     }
 
-    return res.json();
+    const data = await res.json() as SkillSearchResult[] | { skills?: SkillSearchResult[] };
+    return Array.isArray(data) ? data : data.skills || [];
   }
 
   async getSkillMetadata(namespace: string, name: string): Promise<SkillMetadata> {
@@ -76,7 +81,8 @@ export class ApiClient {
       throw new Error(`Get versions failed: ${res.status} ${res.statusText}`);
     }
 
-    return res.json();
+    const data = await res.json() as SkillVersion[] | { versions?: SkillVersion[] };
+    return Array.isArray(data) ? data : data.versions || [];
   }
 
   async downloadTarball(
@@ -127,7 +133,7 @@ export class ApiClient {
     const res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
-        'User-Agent': 'skilo-cli/1.0.1',
+        'User-Agent': 'skilo-cli/1.0.2',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
       body: formData,
@@ -293,9 +299,13 @@ export async function loadConfig(): Promise<CliConfig> {
   try {
     await access(CONFIG_FILE, constants.F_OK);
     const content = await readFile(CONFIG_FILE, 'utf-8');
-    return JSON.parse(content);
+    const parsed = JSON.parse(content) as CliConfig;
+    return {
+      ...parsed,
+      baseUrl: resolveBaseUrl(parsed.baseUrl),
+    };
   } catch {
-    return { baseUrl: DEFAULT_API_URL };
+    return { baseUrl: resolveBaseUrl() };
   }
 }
 

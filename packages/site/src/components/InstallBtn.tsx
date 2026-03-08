@@ -5,14 +5,15 @@ interface InstallBtnProps {
   skillId: string;
   namespace: string;
   name: string;
+  command?: string;
 }
 
-function InstallBtn({ namespace, name }: InstallBtnProps) {
+function InstallBtn({ namespace, name, command }: InstallBtnProps) {
   const [copied, setCopied] = useState(false);
-  const command = `npx skilo add ${namespace}/${name}`;
+  const installCommand = command || `npx skilo-cli add ${namespace}/${name}`;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(command);
+    navigator.clipboard.writeText(installCommand);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -20,7 +21,7 @@ function InstallBtn({ namespace, name }: InstallBtnProps) {
   return (
     <div className="flex items-center gap-2">
       <code className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-lg font-mono text-sm">
-        {command}
+        {installCommand}
       </code>
       <button
         onClick={handleCopy}
