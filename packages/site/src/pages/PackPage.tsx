@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { CopyIcon } from "../components/icons";
 import { api } from "../api/skilo";
 import type { PackData } from "../api/skilo";
 
 const NAV_LINK = "text-sm underline decoration-stone-400/50 underline-offset-[2.5px] hover:decoration-stone-500 transition-[text-decoration-color] duration-150";
-const PRIMARY_BTN = "inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded text-[#0a1a1a] text-sm font-medium whitespace-nowrap bg-emerald-100 shadow-[0_2px_0_0_#6ee7b7] active:translate-y-px active:shadow-[0_1px_0_0_#34d399] transition-[transform,box-shadow] duration-75 cursor-pointer select-none";
 const MAIN = "flex flex-col gap-4 max-w-[600px] mx-auto p-5 pt-28 pb-20 lg:p-10 lg:pt-32 lg:pb-32 leading-relaxed text-base";
 
 function PackPage() {
@@ -14,23 +13,52 @@ function PackPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selected, setSelected] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (!token) return;
     api
       .resolvePack(token)
-      .then(setPack)
+      .then((data) => {
+        setPack(data);
+        const all: Record<number, boolean> = {};
+        data.skills.forEach((_, i) => { all[i] = true; });
+        setSelected(all);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [token]);
 
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+  const allSelected = pack ? selectedCount === pack.skills.length : false;
+
+  const installText = useMemo(() => {
+    if (!pack) return "";
+    if (allSelected) return `npx skilo-cli add skilo.xyz/p/${pack.token}`;
+    const cmds = pack.skills
+      .filter((_, i) => selected[i])
+      .map((s) => `npx skilo-cli add skilo.xyz/s/${s.shareToken}`);
+    return cmds.join("\n");
+  }, [pack, selected, allSelected]);
+
   const handleCopy = async () => {
-    if (!pack) return;
-    const command = `npx skilo-cli add https://skilo.xyz/p/${pack.token}`;
-    await navigator.clipboard.writeText(command);
+    if (!installText) return;
+    await navigator.clipboard.writeText(installText);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
+
+  function toggleSkill(i: number) {
+    setSelected((prev) => ({ ...prev, [i]: !prev[i] }));
+  }
+
+  function toggleAll() {
+    if (!pack) return;
+    const next: Record<number, boolean> = {};
+    const target = !allSelected;
+    pack.skills.forEach((_, i) => { next[i] = target; });
+    setSelected(next);
+  }
 
   if (loading) {
     return (
@@ -52,86 +80,164 @@ function PackPage() {
     );
   }
 
+  const verifiedCount = pack.skills.filter((s) => s.verified).length;
+
   return (
     <main className={MAIN}>
-      {(() => {
-        const verifiedCount = pack.skills.filter((skill) => skill.verified).length;
-        return (
-          <div className="flex flex-wrap gap-1.5">
-            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
-              {pack.skills.length} skill{pack.skills.length !== 1 ? "s" : ""}
-            </span>
-            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
-              {verifiedCount} verified
+      {/* ── Header ── */}
+      <div className="flex flex-col gap-1">
+        <p className="text-lg font-medium text-black tracking-[-0.01em]">
+          {pack.name || "Skill Pack"}
+        </p>
+        <div className="flex items-center gap-2 text-xs text-stone-400">
+          <span>
+            {pack.skills.length} skill{pack.skills.length !== 1 ? "s" : ""}
+          </span>
+          {verifiedCount > 0 && (
+            <>
+              <span className="text-stone-300">&middot;</span>
+              <span className="text-emerald-500">
+                {verifiedCount === pack.skills.length
+                  ? "all verified"
+                  : `${verifiedCount} verified`}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Install (terminal — always stable) ── */}
+      <div className="mt-4 overflow-hidden rounded-xl border border-stone-800/80 shadow-lg shadow-stone-900/5">
+        <div className="flex items-center justify-between border-b border-stone-800/60 bg-stone-900 px-4 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-stone-700" />
+            <div className="h-2.5 w-2.5 rounded-full bg-stone-700" />
+            <div className="h-2.5 w-2.5 rounded-full bg-stone-700" />
+          </div>
+          <button
+            type="button"
+            onClick={handleCopy}
+            disabled={selectedCount === 0}
+            className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-300 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:text-stone-500"
+          >
+            <CopyIcon className="h-3 w-3" />
+            {copied
+              ? "Copied"
+              : selectedCount === 0
+                ? "Copy"
+                : allSelected
+                  ? "Copy"
+                  : `Copy ${selectedCount}/${pack.skills.length}`}
+          </button>
+        </div>
+        <div className="bg-stone-950 px-5 py-4 font-mono text-[13px] leading-6">
+          <div>
+            <span className="text-stone-600">$ </span>
+            <span className="text-stone-200">
+              npx skilo-cli add skilo.xyz/p/{pack.token}
             </span>
           </div>
-        );
-      })()}
-
-      {/* Header info */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <p className="text-lg font-medium text-black tracking-[-0.01em]">
-            {pack.name || "Skill Pack"}
-          </p>
-          <p className="text-stone-500">
-            {pack.skills.length} skill{pack.skills.length !== 1 ? "s" : ""}
-          </p>
+          <div className="pl-4 text-stone-500">
+            &#10003; {pack.skills.length} skill
+            {pack.skills.length !== 1 ? "s" : ""} installed
+          </div>
         </div>
-        <button type="button" onClick={handleCopy} className={PRIMARY_BTN}>
-          <CopyIcon className="h-4 w-4" />
-          {copied ? "Copied" : "Copy install"}
-        </button>
       </div>
+      <p className="text-xs text-stone-400 -mt-1">
+        Auto-detects installed tools.{" "}
+        Run{" "}
+        <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">
+          npx skilo-cli inspect skilo.xyz/p/{pack.token}
+        </code>{" "}
+        to review before installing.
+      </p>
 
-      <div className="mt-4">
-        <code className="block overflow-x-auto rounded bg-stone-100 px-3 py-2 font-mono text-[13px] whitespace-nowrap text-stone-700">
-          {`npx skilo-cli add https://skilo.xyz/p/${pack.token}`}
-        </code>
-        <p className="mt-2 text-xs text-stone-400">
-          Skilo auto-detects installed tools. Pass <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--cc</code>, <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--codex</code>, <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--cursor</code>, or <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">--oc</code> to force a target.
-        </p>
-        <code className="mt-2 block overflow-x-auto rounded bg-stone-50 px-3 py-2 font-mono text-[12px] whitespace-nowrap text-stone-500">
-          {`npx skilo-cli inspect https://skilo.xyz/p/${pack.token}`}
-        </code>
-      </div>
-
-      {/* Skill list */}
-      <div className="mt-6 flex flex-col gap-3">
-        {pack.skills.map((skill) => (
-          <Link
-            key={`${skill.namespace}/${skill.name}`}
-            to={`/s/${skill.shareToken}`}
-            className="block rounded-lg border border-stone-200 px-4 py-3 transition-colors hover:border-stone-300 hover:bg-stone-50"
+      {/* ── Skills ── */}
+      <div className="mt-6 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-black">Skills</p>
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors cursor-pointer"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-black">
-                  {skill.namespace}/{skill.name}
-                  {skill.version && (
-                    <span className="ml-2 text-xs font-normal text-stone-400">
-                      v{skill.version}
-                    </span>
+            {allSelected ? "Deselect all" : "Select all"}
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          {pack.skills.map((skill, i) => {
+            const checked = !!selected[i];
+            return (
+              <div
+                key={`${skill.namespace}/${skill.name}`}
+                className={`group flex items-start gap-3 rounded-lg border px-4 py-3 transition-all duration-150 ${
+                  checked
+                    ? "border-stone-200 hover:border-stone-300"
+                    : "border-stone-100 opacity-50"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    toggleSkill(i);
+                  }}
+                  className="shrink-0 p-2 -m-2 cursor-pointer"
+                  aria-label={`${checked ? "Deselect" : "Select"} ${skill.name}`}
+                >
+                  <div
+                    className={`h-3.5 w-3.5 rounded-[3px] border transition-colors flex items-center justify-center ${
+                      checked
+                        ? "border-emerald-400 bg-emerald-50"
+                        : "border-stone-300 bg-white"
+                    }`}
+                  >
+                    {checked && (
+                      <svg className="h-2.5 w-2.5 text-emerald-500" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2.5 6l2.5 2.5 4.5-5" />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+                <Link
+                  to={`/s/${skill.shareToken}`}
+                  className="min-w-0 flex-1"
+                >
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-black">
+                      <span className="text-stone-400 font-normal">
+                        {skill.namespace}/
+                      </span>
+                      {skill.name}
+                    </p>
+                    {skill.version && (
+                      <span className="text-[11px] text-stone-400">
+                        v{skill.version}
+                      </span>
+                    )}
+                    {skill.verified && (
+                      <span className="rounded-full bg-emerald-50 px-1.5 py-px text-[10px] text-emerald-600 ring-1 ring-inset ring-emerald-200">
+                        Verified
+                      </span>
+                    )}
+                  </div>
+                  {skill.description && (
+                    <p className="mt-0.5 text-sm text-stone-500 line-clamp-1">
+                      {skill.description}
+                    </p>
                   )}
-                </p>
-                {skill.description && (
-                  <p className="mt-0.5 text-sm text-stone-500 line-clamp-1">
-                    {skill.description}
-                  </p>
-                )}
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
-                    {skill.verified ? "Verified" : "Unsigned"}
-                  </span>
-                  <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
-                    {skill.visibility === "public" ? "Public" : "Unlisted"}
-                  </span>
-                </div>
+                </Link>
+                <Link
+                  to={`/s/${skill.shareToken}`}
+                  className="shrink-0 text-stone-300 text-sm group-hover:text-stone-500 transition-colors pt-0.5"
+                >
+                  &rarr;
+                </Link>
               </div>
-              <span className="shrink-0 text-stone-400 text-sm">&rarr;</span>
-            </div>
-          </Link>
-        ))}
+            );
+          })}
+        </div>
       </div>
     </main>
   );
