@@ -55,23 +55,60 @@ function parseFrontMatter(content: string): { data: Record<string, unknown>; con
   return { data, content: mdContent };
 }
 
+function parseMarkdownSkill(content: string): SkillManifest {
+  const lines = content.split('\n');
+  const heading = lines.find((line) => /^#\s+/.test(line))?.replace(/^#\s+/, '').trim() || '';
+
+  const descriptionLines: string[] = [];
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+
+    if (inCodeBlock || !trimmed || /^#/.test(trimmed)) {
+      if (heading && descriptionLines.length > 0) {
+        break;
+      }
+      continue;
+    }
+
+    descriptionLines.push(trimmed);
+    if (descriptionLines.join(' ').length >= 240) {
+      break;
+    }
+  }
+
+  return {
+    name: heading,
+    description: descriptionLines.join(' ').trim(),
+  };
+}
+
 /**
  * Parse SKILL.md file content with YAML frontmatter
  */
 export function parseSkillManifest(content: string): ParseResult {
   const { data, content: mdContent } = parseFrontMatter(content);
+  const hasFrontmatter = Object.keys(data).length > 0;
 
-  const manifest: SkillManifest = {
-    name: (data.name as string) || '',
-    description: (data.description as string) || '',
-    version: data.version as string | undefined,
-    author: data.author as string | undefined,
-    homepage: data.homepage as string | undefined,
-    repository: data.repository as string | undefined,
-    keywords: data.keywords as string[] | undefined,
-    api: data.api as string | undefined,
-    runtime: data.runtime as string | undefined,
-  };
+  const manifest: SkillManifest = hasFrontmatter
+    ? {
+        name: (data.name as string) || '',
+        description: (data.description as string) || '',
+        version: data.version as string | undefined,
+        author: data.author as string | undefined,
+        homepage: data.homepage as string | undefined,
+        repository: data.repository as string | undefined,
+        keywords: data.keywords as string[] | undefined,
+        api: data.api as string | undefined,
+        runtime: data.runtime as string | undefined,
+      }
+    : parseMarkdownSkill(content);
 
   return {
     manifest,

@@ -38,7 +38,7 @@ export class ApiClient {
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'User-Agent': 'skilo-cli/1.0.0',
+      'User-Agent': 'skilo-cli/1.0.1',
     };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -127,7 +127,7 @@ export class ApiClient {
     const res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
-        'User-Agent': 'skilo-cli/1.0.0',
+        'User-Agent': 'skilo-cli/1.0.1',
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       },
       body: formData,

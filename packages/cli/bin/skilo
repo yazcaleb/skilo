@@ -1,15 +1,14 @@
-// CLI entry point (bin file)
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
-const cliPath = fileURLToPath(join(dirname(fileURLToPath(import.meta.url)), 'dist', 'index.js'));
+const binDir = dirname(fileURLToPath(import.meta.url));
+const cliPath = resolve(binDir, '..', 'dist', 'index.js');
 
 const child = spawn(process.execPath, [cliPath, ...process.argv.slice(2)], {
   stdio: 'inherit',
-  shell: true,
 });
 
 child.on('exit', (code) => {

@@ -29,7 +29,7 @@ const program = new Command();
 program
   .name('skilo')
   .description('npm-like registry for Agent Skills')
-  .version('1.0.0');
+  .version('1.0.1');
 
 // Auth (optional)
 program.command('login').description('Login to publish skills').action(loginCommand);

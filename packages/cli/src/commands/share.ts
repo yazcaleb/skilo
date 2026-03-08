@@ -1,5 +1,7 @@
 import { getClient } from '../api/client.js';
 import { createInterface } from 'node:readline';
+import { resolveSkillLocation } from '../utils/skill-file.js';
+import { publishLocalSkill } from './publish.js';
 
 function parseSkillRef(skill: string): { namespace: string; name: string } {
   const parts = skill.split('/');
@@ -28,12 +30,12 @@ export async function shareCommand(
   options: { oneTime?: boolean; expires?: string; uses?: number; password?: boolean; qr?: boolean } = {}
 ): Promise<void> {
   if (!skill) {
-    console.error('Usage: skilo share <namespace/name> [--one-time] [--expires 1h] [--uses 5] [--password]');
+    console.error('Usage: skilo share <path|namespace/name> [--one-time] [--expires 1h] [--uses 5] [--password]');
     process.exit(1);
   }
 
   try {
-    const { namespace, name } = parseSkillRef(skill);
+    const target = await resolveShareTarget(skill);
     const client = await getClient();
 
     // Parse expires
@@ -59,15 +61,19 @@ export async function shareCommand(
     }
 
     const result = await client.createShareLink(
-      namespace,
-      name,
+      target.namespace,
+      target.name,
       options.oneTime || false,
       expiresAt,
       options.uses,
       password
     );
 
-    console.log(`✓ Created share link for ${namespace}/${name}`);
+    if (target.publishedVersion) {
+      console.log(`✓ Published @${target.namespace}/${target.name}@${target.publishedVersion} for sharing`);
+    }
+
+    console.log(`✓ Created share link for ${target.namespace}/${target.name}`);
     console.log(`\n${result.url}`);
     if (options.oneTime) console.log('  (one-time use)');
     if (expiresAt) console.log(`  (expires: ${new Date(expiresAt).toISOString()})`);
@@ -99,4 +105,25 @@ function generateQRCode(url: string): string {
     ██████████████
            ${url.slice(0, 30)}...
   `;
+}
+
+async function resolveShareTarget(skill: string): Promise<{ namespace: string; name: string; publishedVersion?: string }> {
+  try {
+    await resolveSkillLocation(skill);
+  } catch (e) {
+    const message = (e as Error).message;
+    if (message.startsWith('Path not found:')) {
+      const { namespace, name } = parseSkillRef(skill);
+      return { namespace, name };
+    }
+
+    throw e;
+  }
+
+  const { manifest, namespace } = await publishLocalSkill(skill);
+  return {
+    namespace,
+    name: manifest.name,
+    publishedVersion: manifest.version || '0.1.0',
+  };
 }

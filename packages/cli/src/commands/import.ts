@@ -68,7 +68,7 @@ async function importFromGitHub(source: string): Promise<string> {
   const response = await fetch(tarballUrl, {
     headers: {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'skilo-cli/1.0.0',
+      'User-Agent': 'skilo-cli/1.0.1',
     },
   });
 
