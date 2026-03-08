@@ -30,15 +30,21 @@ function addInstallTargetOptions(command: Command): Command {
     .option('-g, --global', 'Install globally')
     .option('--cc', 'Install into Claude Code')
     .option('--claude-code', 'Install into Claude Code')
+    .option('--codex', 'Install into Codex')
+    .option('--cursor', 'Install into Cursor')
+    .option('--amp', 'Install into Amp')
+    .option('--windsurf', 'Install into Windsurf')
     .option('--oc', 'Install into OpenCode')
     .option('--opencode', 'Install into OpenCode')
+    .option('--cline', 'Install into Cline')
+    .option('--roo', 'Install into Roo')
     .option('--openclaw', 'Install into OpenClaw');
 }
 
 program
   .name('skilo')
   .description('Tiny sharing layer for agent skills')
-  .version('1.0.5');
+  .version('1.0.6');
 
 // Auth (optional)
 program.command('login').description('Login to publish skills').action(loginCommand);

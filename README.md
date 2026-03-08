@@ -1,6 +1,6 @@
 # Skilo
 
-Skilo is a tiny sharing layer for agent skills. Turn a `SKILL.md` folder into a link, then install it into Claude Code, OpenCode, and other agents with one command.
+Skilo is a tiny sharing layer for agent skills. Turn a `SKILL.md` folder into a link, then install it into Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, OpenClaw, and other agents with one command.
 
 [![npm version](https://badge.fury.io/js/skilo-cli.svg)](https://www.npmjs.com/package/skilo-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -22,7 +22,7 @@ Current skill sharing usually means repos, manifests, or manual copy-paste. Skil
 ## Features
 
 - **⚡ Share instantly** - Create a link in seconds, no registration required
-- **🌐 Install anywhere** - Add into Claude Code, OpenCode, or OpenClaw with explicit target flags
+- **🌐 Install anywhere** - Add into Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, or OpenClaw with explicit target flags
 - **🔒 Trust what you install** - Inspect, verify checksums, then add with confidence
 - **⏱️ Expiring links** - One-time use, time-limited, or max-uses links
 - **🔐 Password protection** - Extra security for sensitive skills
@@ -66,6 +66,9 @@ skilo add https://skilo.xyz/s/a3xK9mP2 --cc
 # Into OpenCode
 skilo add https://skilo.xyz/s/a3xK9mP2 --oc
 
+# Into Codex, Cursor, and Roo
+skilo add https://skilo.xyz/s/a3xK9mP2 --codex --cursor --roo
+
 # From namespace/name
 skilo add namespace/skill-name
 
@@ -94,6 +97,22 @@ skilo inspect https://skilo.xyz/s/a3xK9mP2
 | `skilo publish [path]` | Publish to the registry |
 | `skilo init [name]` | Create a new skill |
 | `skilo validate` | Validate SKILL.md |
+
+## Supported Tools
+
+Skilo installs into these native skill directories:
+
+| Tool | Directory |
+|------|-----------|
+| Claude Code | `~/.claude/skills/` |
+| Codex | `~/.agents/skills/`, `~/.codex/skills/` |
+| Cursor | `~/.cursor/skills/` |
+| Amp | `~/.config/agents/skills/` |
+| Windsurf | `~/.codeium/windsurf/skills/` |
+| OpenCode | `~/.config/opencode/skills/` |
+| Cline | `~/.cline/skills/` |
+| Roo | `~/.roo/skills/` |
+| OpenClaw | `~/.openclaw/skills/` |
 
 ## .skl File Format
 
