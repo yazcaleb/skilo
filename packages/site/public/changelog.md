@@ -4,6 +4,10 @@
 
 ## 2026-03-09
 
+### Added
+
+- Support GitHub repo path shorthand sources (`bb29f88`)
+
 ### Changed
 
 - Polish bulk skill sharing flow (`a9b7b0b`)
