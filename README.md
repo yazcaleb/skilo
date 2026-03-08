@@ -1,6 +1,6 @@
 # Skilo
 
-Instant skill handoff. Share agent skills between people and AI systems with a single command.
+Skilo is a tiny sharing layer for agent skills. Turn a `SKILL.md` folder into a link, then install it into Claude Code, OpenCode, and other agents with one command.
 
 [![npm version](https://badge.fury.io/js/skilo-cli.svg)](https://www.npmjs.com/package/skilo-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -15,14 +15,14 @@ $ npx skilo-cli add https://skilo.xyz/s/a3xK9mP2
 
 ## Why Skilo?
 
-Current skill sharing requires GitHub repos, team manifests, or complex setup. Skilo is the minimal layer for instant skill transfer—one headline, one sentence, one demo, done.
+Current skill sharing usually means repos, manifests, or manual copy-paste. Skilo keeps the social layer simple: send a skill like a link, not like a project.
 
 **The difference from Vercel's skills.sh:** While skills.sh is discovery-focused with leaderboards, Skilo is transfer-focused. It's the obvious answer for sharing a skill directly when there is no repo flow, no team manifest, and no desire to sign up first.
 
 ## Features
 
 - **⚡ Share instantly** - Create a link in seconds, no registration required
-- **🌐 Install anywhere** - Works between agents and humans, compatible with existing workflows
+- **🌐 Install anywhere** - Add into Claude Code, OpenCode, or OpenClaw with explicit target flags
 - **🔒 Trust what you install** - Inspect, verify checksums, then add with confidence
 - **⏱️ Expiring links** - One-time use, time-limited, or max-uses links
 - **🔐 Password protection** - Extra security for sensitive skills
@@ -60,8 +60,11 @@ skilo share ./my-skill --password
 ### Install a skill
 
 ```bash
-# From share link
-skilo add https://skilo.xyz/s/a3xK9mP2
+# From a share link into Claude Code
+skilo add https://skilo.xyz/s/a3xK9mP2 --cc
+
+# Into OpenCode
+skilo add https://skilo.xyz/s/a3xK9mP2 --oc
 
 # From namespace/name
 skilo add namespace/skill-name
@@ -84,7 +87,7 @@ skilo inspect https://skilo.xyz/s/a3xK9mP2
 | Command | Description |
 |---------|-------------|
 | `skilo share <path>` | Create a shareable link |
-| `skilo add <skill>` | Install a skill |
+| `skilo add <skill>` | Install a skill from a share link, registry ref, or other source |
 | `skilo inspect <skill>` | View skill details without installing |
 | `skilo export [path]` | Export to .skl file |
 | `skilo import <source>` | Import from GitHub, .skl, or local path |
@@ -118,7 +121,7 @@ All skills have SHA-256 checksums. Verified skills are also cryptographically si
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────┐
-│   skilo.xyz     │────▶│  api.skilo.dev   │────▶│   D1    │
+│   skilo.xyz     │────▶│ skilo API Worker │────▶│   D1    │
 │  (Cloudflare    │     │  (Cloudflare     │     │  (SQL)  │
 │   Pages)        │◀────│   Worker)        │◀────├─────────┤
 └─────────────────┘     └──────────────────┘     │   R2    │

@@ -25,11 +25,20 @@ import { importCommand } from './commands/import.js';
 import { inspectCommand } from './commands/inspect.js';
 
 const program = new Command();
+function addInstallTargetOptions(command: Command): Command {
+  return command
+    .option('-g, --global', 'Install globally')
+    .option('--cc', 'Install into Claude Code')
+    .option('--claude-code', 'Install into Claude Code')
+    .option('--oc', 'Install into OpenCode')
+    .option('--opencode', 'Install into OpenCode')
+    .option('--openclaw', 'Install into OpenClaw');
+}
 
 program
   .name('skilo')
-  .description('npm-like registry for Agent Skills')
-  .version('1.0.4');
+  .description('Tiny sharing layer for agent skills')
+  .version('1.0.5');
 
 // Auth (optional)
 program.command('login').description('Login to publish skills').action(loginCommand);
@@ -43,24 +52,24 @@ program.command('cat <skill>').description('View skill before installing').actio
 program.command('list').description('List installed skills').action(listCommand);
 
 // Package management
-program
-  .command('add <skill>')
-  .description('Add a skill (alias for install)')
-  .option('-g, --global', 'Install globally')
-  .action((skill, options) => installCommand(skill, options));
-program
-  .command('install <skill>')
-  .description('Install a skill')
-  .option('-g, --global', 'Install globally')
-  .action((skill, options) => installCommand(skill, options));
+addInstallTargetOptions(
+  program
+    .command('add <skill>')
+    .description('Add a skill (alias for install)')
+).action((skill, options) => installCommand(skill, options));
+addInstallTargetOptions(
+  program
+    .command('install <skill>')
+    .description('Install a skill')
+).action((skill, options) => installCommand(skill, options));
 program.command('update <skill>').description('Update a skill').action(updateCommand);
 
 // Import/Export
-program
-  .command('import <source>')
-  .description('Import from GitHub, .skl, URL, or local path')
-  .option('-g, --global', 'Install globally')
-  .action(importCommand);
+addInstallTargetOptions(
+  program
+    .command('import <source>')
+    .description('Import from GitHub, .skl, URL, or local path')
+).action(importCommand);
 program
   .command('export [path]')
   .description('Export skill to .skl file')

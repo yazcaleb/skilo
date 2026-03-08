@@ -1,18 +1,15 @@
 // Import skill from various sources
 import { readFile, mkdir, writeFile, rm, cp } from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
 import { join, resolve, basename } from 'node:path';
-import { createGunzip } from 'node:zlib';
+import { tmpdir } from 'node:os';
+import { mkdtemp } from 'node:fs/promises';
 import * as tar from 'tar';
 import { getClient } from '../api/client.js';
 import { isRegistrySkillRef } from '../utils/source-kind.js';
+import { findSkillFile } from '../utils/skill-file.js';
+import { type InstallOptions, describeInstallTargets, getInstallDirs } from '../utils/install-targets.js';
 
-interface ImportOptions {
-  global?: boolean;
-}
-
-export async function importCommand(source: string, options: ImportOptions = {}): Promise<void> {
+export async function importCommand(source: string, options: InstallOptions = {}): Promise<void> {
   if (!source) {
     console.error('Usage: skilo import <source>');
     console.error('');
@@ -25,6 +22,8 @@ export async function importCommand(source: string, options: ImportOptions = {})
     process.exit(1);
   }
 
+  let cleanupPath: string | null = null;
+
   try {
     if (await isRegistrySkillRef(source)) {
       const { installCommand } = await import('./install.js');
@@ -35,33 +34,45 @@ export async function importCommand(source: string, options: ImportOptions = {})
     let skillPath: string;
 
     if (source.startsWith('github:')) {
-      // GitHub import
-      skillPath = await importFromGitHub(source);
+      const imported = await importFromGitHub(source);
+      skillPath = imported.skillPath;
+      cleanupPath = imported.cleanupPath;
     } else if (source.endsWith('.skl')) {
-      // .skl file import
-      skillPath = await importFromSkl(source);
+      const imported = await importFromSkl(source);
+      skillPath = imported.skillPath;
+      cleanupPath = imported.cleanupPath;
     } else if (source.startsWith('https://skilo.xyz/s/')) {
-      // Share link import
-      skillPath = await importFromShareLink(source);
+      const imported = await importFromShareLink(source);
+      skillPath = imported.skillPath;
+      cleanupPath = imported.cleanupPath;
     } else if (source.startsWith('http://') || source.startsWith('https://')) {
-      // Direct URL
-      skillPath = await importFromUrl(source);
+      const imported = await importFromUrl(source);
+      skillPath = imported.skillPath;
+      cleanupPath = imported.cleanupPath;
     } else {
       // Local path
       skillPath = await importFromLocalPath(source);
     }
 
     // Install to skills directory
-    await installSkill(skillPath, options.global);
+    await installSkill(skillPath, options);
 
     console.log(`✓ Imported from ${source}`);
   } catch (e) {
     console.error(`Import failed: ${(e as Error).message}`);
     process.exit(1);
+  } finally {
+    if (cleanupPath) {
+      await rm(cleanupPath, { recursive: true, force: true });
+    }
   }
 }
 
-async function importFromGitHub(source: string): Promise<string> {
+async function createTempDir(prefix: string): Promise<string> {
+  return mkdtemp(join(tmpdir(), prefix));
+}
+
+async function importFromGitHub(source: string): Promise<{ skillPath: string; cleanupPath: string }> {
   const match = source.match(/^github:([^/]+)\/([^#]+)(?:#(.+))?$/);
   if (!match) {
     throw new Error('Invalid GitHub source format. Use: github:user/repo or github:user/repo#path');
@@ -75,7 +86,7 @@ async function importFromGitHub(source: string): Promise<string> {
   const response = await fetch(tarballUrl, {
     headers: {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'skilo-cli/1.0.4',
+      'User-Agent': 'skilo-cli/1.0.5',
     },
   });
 
@@ -84,8 +95,7 @@ async function importFromGitHub(source: string): Promise<string> {
   }
 
   // Download and extract
-  const tempDir = join(process.cwd(), '.skilo-temp-import');
-  await mkdir(tempDir, { recursive: true });
+  const tempDir = await createTempDir(`skilo-import-github-${Date.now()}`);
 
   const tempTar = join(tempDir, 'download.tar.gz');
   const buffer = await response.arrayBuffer();
@@ -103,18 +113,17 @@ async function importFromGitHub(source: string): Promise<string> {
 
   // If subpath specified, return that
   if (subpath) {
-    return join(tempDir, subpath);
+    return { skillPath: join(tempDir, subpath), cleanupPath: tempDir };
   }
 
-  return tempDir;
+  return { skillPath: tempDir, cleanupPath: tempDir };
 }
 
-async function importFromSkl(source: string): Promise<string> {
+async function importFromSkl(source: string): Promise<{ skillPath: string; cleanupPath: string }> {
   const resolvedPath = resolve(source);
   console.log(`Extracting .skl file: ${resolvedPath}...`);
 
-  const tempDir = join(process.cwd(), '.skilo-temp-import');
-  await mkdir(tempDir, { recursive: true });
+  const tempDir = await createTempDir(`skilo-import-skl-${Date.now()}`);
 
   // Extract tar.gz
   await tar.extract({
@@ -123,10 +132,10 @@ async function importFromSkl(source: string): Promise<string> {
     gzip: true,
   });
 
-  return tempDir;
+  return { skillPath: tempDir, cleanupPath: tempDir };
 }
 
-async function importFromShareLink(source: string): Promise<string> {
+async function importFromShareLink(source: string): Promise<{ skillPath: string; cleanupPath: string }> {
   const token = source.split('/s/')[1];
   if (!token) {
     throw new Error('Invalid share link format');
@@ -160,15 +169,15 @@ async function importFromShareLink(source: string): Promise<string> {
   }
 
   // Download tarball
-  const tempDir = join(process.cwd(), '.skilo-temp-import');
-  await mkdir(tempDir, { recursive: true });
+  const tempDir = await createTempDir(`skilo-import-share-${Date.now()}`);
 
   const tarballUrl = data.skill.tarballUrl;
   if (!tarballUrl) {
     throw new Error('No tarball available for this skill');
   }
 
-  const tarballResponse = await fetch(`${client.baseUrl}${tarballUrl}`);
+  const downloadUrl = tarballUrl.startsWith('http') ? tarballUrl : `${client.baseUrl}${tarballUrl}`;
+  const tarballResponse = await fetch(downloadUrl);
   if (!tarballResponse.ok) {
     throw new Error('Failed to download skill');
   }
@@ -186,10 +195,10 @@ async function importFromShareLink(source: string): Promise<string> {
 
   await rm(tempTar);
 
-  return tempDir;
+  return { skillPath: tempDir, cleanupPath: tempDir };
 }
 
-async function importFromUrl(source: string): Promise<string> {
+async function importFromUrl(source: string): Promise<{ skillPath: string; cleanupPath: string }> {
   console.log(`Downloading from URL: ${source}...`);
 
   const response = await fetch(source);
@@ -197,8 +206,7 @@ async function importFromUrl(source: string): Promise<string> {
     throw new Error(`Download failed: ${response.status} ${response.statusText}`);
   }
 
-  const tempDir = join(process.cwd(), '.skilo-temp-import');
-  await mkdir(tempDir, { recursive: true });
+  const tempDir = await createTempDir(`skilo-import-url-${Date.now()}`);
 
   const buffer = await response.arrayBuffer();
   const tempFile = join(tempDir, 'download');
@@ -215,7 +223,7 @@ async function importFromUrl(source: string): Promise<string> {
     await rm(tempFile);
   }
 
-  return tempDir;
+  return { skillPath: tempDir, cleanupPath: tempDir };
 }
 
 async function importFromLocalPath(source: string): Promise<string> {
@@ -223,34 +231,35 @@ async function importFromLocalPath(source: string): Promise<string> {
   console.log(`Importing from local path: ${resolvedPath}...`);
 
   // Validate SKILL.md exists
-  try {
-    await readFile(join(resolvedPath, 'SKILL.md'), 'utf-8');
-  } catch {
-    throw new Error('No SKILL.md found in the specified path');
+  if (!await findSkillFile(resolvedPath)) {
+    throw new Error('No SKILL.md or skill.md found in the specified path');
   }
 
   return resolvedPath;
 }
 
-async function installSkill(skillPath: string, global?: boolean): Promise<void> {
-  const skillsDir = global
-    ? join(process.env.HOME || '', '.skilo', 'skills')
-    : join(process.cwd(), '.claude', 'skills');
+async function installSkill(skillPath: string, options: InstallOptions = {}): Promise<void> {
+  const skillFile = await findSkillFile(skillPath);
+  if (!skillFile) {
+    throw new Error(`No SKILL.md or skill.md found in ${skillPath}`);
+  }
 
-  await mkdir(skillsDir, { recursive: true });
-
-  // Read SKILL.md to get name
-  const skillMd = await readFile(join(skillPath, 'SKILL.md'), 'utf-8');
+  const skillMd = await readFile(join(skillPath, skillFile), 'utf-8');
   const nameMatch = skillMd.match(/#\s*(.+)/);
   const name = nameMatch ? nameMatch[1].trim() : basename(skillPath);
+  const installDirs = getInstallDirs(options);
 
-  const targetDir = join(skillsDir, name.replace(/\//g, '-'));
-  await mkdir(targetDir, { recursive: true });
+  for (const skillsDir of installDirs) {
+    await mkdir(skillsDir, { recursive: true });
 
-  // Copy files
-  await cp(skillPath, targetDir, { recursive: true });
+    const targetDir = join(skillsDir, name.replace(/\//g, '-'));
+    await rm(targetDir, { recursive: true, force: true });
+    await mkdir(targetDir, { recursive: true });
+    await cp(skillPath, targetDir, { recursive: true });
+    console.log(`✓ Installed to ${targetDir}`);
+  }
 
-  console.log(`✓ Installed to ${targetDir}`);
+  console.log(`✓ Installed for ${describeInstallTargets(options)}`);
 }
 
 async function promptPassword(): Promise<string> {
@@ -267,6 +276,3 @@ async function promptPassword(): Promise<string> {
     });
   });
 }
-
-// Need to extend ApiClient with baseUrl
-// Add this to the API client file

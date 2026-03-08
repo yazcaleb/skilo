@@ -4,9 +4,10 @@ import { pipeline } from 'node:stream/promises';
 import { extract } from 'tar';
 import { join } from 'node:path';
 import { createGunzip } from 'node:zlib';
-import { mkdir, unlink, readFile } from 'node:fs/promises';
+import { mkdir, rm, unlink } from 'node:fs/promises';
 import * as crypto from 'node:crypto';
 import { isRegistrySkillRef } from '../utils/source-kind.js';
+import { type InstallOptions, describeInstallTargets, getInstallDirs } from '../utils/install-targets.js';
 
 function parseSkillRef(skill: string): { namespace: string; name: string; version?: string } {
   const parts = skill.split('@');
@@ -17,11 +18,7 @@ function parseSkillRef(skill: string): { namespace: string; name: string; versio
   return { namespace: ref[0], name: ref[1], version: parts[1] };
 }
 
-function getSkillsDir(): string {
-  return join(process.cwd(), '.claude', 'skills');
-}
-
-export async function installCommand(skill: string, _options?: { global?: boolean }): Promise<void> {
+export async function installCommand(skill: string, options: InstallOptions = {}): Promise<void> {
   if (!skill) {
     console.error('Usage: skilo install <skill|source>');
     process.exit(1);
@@ -30,7 +27,7 @@ export async function installCommand(skill: string, _options?: { global?: boolea
   try {
     if (!await isRegistrySkillRef(skill)) {
       const { importCommand } = await import('./import.js');
-      await importCommand(skill, _options);
+      await importCommand(skill, options);
       return;
     }
 
@@ -69,28 +66,29 @@ export async function installCommand(skill: string, _options?: { global?: boolea
       console.log('✓ Checksum verified');
     }
 
-    // Extract to skills directory
-    const skillsDir = getSkillsDir();
-    await mkdir(skillsDir, { recursive: true });
+    const installDirs = getInstallDirs(options);
 
-    const skillDir = join(skillsDir, `${namespace}-${name}`);
-    await mkdir(skillDir, { recursive: true });
+    for (const skillsDir of installDirs) {
+      await mkdir(skillsDir, { recursive: true });
 
-    // Write tarball to temp file and extract
-    const tempPath = join(skillDir, 'temp.tgz');
-    const writeStream = createWriteStream(tempPath);
-    await writeStream.write(Buffer.from(tarball));
-    writeStream.end();
-    await new Promise<void>((resolve) => writeStream.on('finish', resolve));
+      const skillDir = join(skillsDir, `${namespace}-${name}`);
+      await rm(skillDir, { recursive: true, force: true });
+      await mkdir(skillDir, { recursive: true });
 
-    // Extract
-    const readStream = createReadStream(tempPath);
-    await pipeline(readStream, createGunzip(), extract({ cwd: skillDir }));
+      const tempPath = join(skillDir, 'temp.tgz');
+      const writeStream = createWriteStream(tempPath);
+      await writeStream.write(Buffer.from(tarball));
+      writeStream.end();
+      await new Promise<void>((resolve) => writeStream.on('finish', resolve));
 
-    // Clean up temp file
-    await unlink(tempPath);
+      const readStream = createReadStream(tempPath);
+      await pipeline(readStream, createGunzip(), extract({ cwd: skillDir }));
+      await unlink(tempPath);
 
-    console.log(`✓ Installed ${namespace}/${name}@${versionToInstall}`);
+      console.log(`✓ Installed to ${skillDir}`);
+    }
+
+    console.log(`✓ Installed ${namespace}/${name}@${versionToInstall} for ${describeInstallTargets(options)}`);
   } catch (e) {
     console.error(`Install failed: ${(e as Error).message}`);
     process.exit(1);
