@@ -6,6 +6,8 @@
 
 ### Changed
 
+- Tighten transfer flows and share semantics (`a97b5c8`)
+- Restore minimal landing flow (`a07afed`)
 - Build unified catalog, profiles, and pack tray (`e778ee1`)
 
 ## 2026-03-08
