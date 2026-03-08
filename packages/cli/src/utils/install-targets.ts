@@ -1,8 +1,8 @@
 import { access, constants } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
-import { isInteractiveOutput, isJsonOutput, printNote, printPrimary, printSection } from './output.js';
+import { isInteractiveOutput, isJsonOutput } from './output.js';
+import { pickItems } from './picker.js';
 
 export interface InstallOptions {
   global?: boolean;
@@ -233,59 +233,22 @@ export async function detectInstalledTargets(): Promise<InstallTarget[]> {
   return detected;
 }
 
-function renderTargetPicker(targets: InstallTarget[]): string {
-  const lines: string[] = [];
-  lines.push('Choose install targets');
-  lines.push('Press enter to install to all detected tools.');
-  lines.push('');
-
-  for (const [index, target] of targets.entries()) {
-    lines.push(`  ${index + 1}. ${getTargetDefinition(target).label}`);
-  }
-
-  lines.push('');
-  lines.push('Examples: 1, 1 3, a=all, q=cancel');
-  return lines.join('\n');
-}
-
 async function promptForInstallTargets(targets: InstallTarget[]): Promise<InstallTarget[]> {
   if (!process.stdin.isTTY || !isInteractiveOutput()) {
     return targets;
   }
 
-  printSection('Install targets');
-  printNote('detected', targets.map((target) => getTargetDefinition(target).label).join(', '));
-  printPrimary(renderTargetPicker(targets));
+  const picked = await pickItems(
+    targets.map((target) => ({
+      value: target,
+      name: getTargetDefinition(target).label,
+      description: getTargetDefinition(target).getDirs(true).join(', '),
+      meta: getTargetFlag(target),
+    })),
+    'Choose install targets'
+  );
 
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise<InstallTarget[]>((resolve) => {
-    rl.question('> ', (answer) => {
-      rl.close();
-      const trimmed = answer.trim().toLowerCase();
-
-      if (trimmed === '' || trimmed === 'a') {
-        resolve(targets);
-        return;
-      }
-
-      if (trimmed === 'q') {
-        resolve([]);
-        return;
-      }
-
-      const selected = trimmed
-        .split(/\s+/)
-        .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value >= 1 && value <= targets.length)
-        .map((value) => targets[value - 1]);
-
-      resolve([...new Set(selected)]);
-    });
-  });
+  return picked.cancelled ? [] : picked.selected;
 }
 
 export async function resolveInstallTargets(

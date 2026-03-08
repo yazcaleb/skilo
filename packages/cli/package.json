@@ -1,6 +1,6 @@
 {
   "name": "skilo-cli",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Share agent skills with a link and install SKILL.md artifacts across AI coding tools",
   "type": "module",
   "main": "dist/index.js",
@@ -19,10 +19,13 @@
   "dependencies": {
     "commander": "^12.1.0",
     "fetch-retry": "^5.0.6",
+    "ink": "^6.8.0",
+    "react": "^19.2.0",
     "tar": "^7.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "@types/react": "^19.2.14",
     "@types/tar": "^6.1.13",
     "typescript": "^5.7.2"
   },

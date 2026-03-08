@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-import type { DiscoveredSkill } from '../tool-dirs.js';
+import { getToolLabel, resolveToolName, type DiscoveredSkill } from '../tool-dirs.js';
 import { isInteractiveOutput, printSection, printNote } from './output.js';
 
 export interface PickerItem<T> {
@@ -42,6 +42,15 @@ export async function pickItems<T>(
 ): Promise<PickerResult<T>> {
   if (!process.stdin.isTTY || !isInteractiveOutput()) {
     return { selected: items.map((item) => item.value), cancelled: false };
+  }
+
+  if (process.env.SKILO_NO_INK !== '1') {
+    try {
+      const { runSelectionPrompt } = await import('../ui/ink/selection.js');
+      return await runSelectionPrompt({ title, items });
+    } catch {
+      // Fall back to the simple prompt if Ink cannot start in the current terminal.
+    }
   }
 
   const selected = items.map(() => true);
@@ -103,14 +112,24 @@ export async function pickItems<T>(
   });
 }
 
-export async function pickSkills(skills: DiscoveredSkill[]): Promise<PickerResult<DiscoveredSkill>> {
+export async function pickSkills(
+  skills: DiscoveredSkill[],
+  title: string = 'Select skills'
+): Promise<PickerResult<DiscoveredSkill>> {
+  const uniqueTools = new Set(skills.map((skill) => skill.tool));
+  const showToolMeta = uniqueTools.size > 1;
+
   return pickItems(
     skills.map((skill) => ({
       value: skill,
       name: skill.name,
       description: skill.description,
-      meta: skill.tool,
+      meta: showToolMeta && resolveToolName(skill.tool)
+        ? getToolLabel(resolveToolName(skill.tool)!)
+        : showToolMeta
+          ? skill.tool
+          : undefined,
     })),
-    'Select skills'
+    title
   );
 }

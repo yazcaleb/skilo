@@ -2,7 +2,7 @@ import { getClient } from '../api/client.js';
 import { createInterface } from 'node:readline';
 import { resolveSkillLocation } from '../utils/skill-file.js';
 import { publishLocalSkill } from './publish.js';
-import { isKnownTool, discoverSkills, resolveToolName } from '../tool-dirs.js';
+import { isKnownTool, discoverSkills, getToolLabel, resolveToolName } from '../tool-dirs.js';
 import { pickSkills } from '../utils/picker.js';
 import { blankLine, exitWithError, isJsonOutput, logError, logInfo, logSuccess, printJson, printNote, printPrimary, printSection, printUsage } from '../utils/output.js';
 
@@ -158,7 +158,9 @@ async function bulkShareCommand(
   toolName: string,
   options: ShareOptions
 ): Promise<void> {
-  logInfo(`Scanning ${toolName === 'all' ? 'all tools' : toolName} for skills`);
+  const resolvedToolName = resolveToolName(toolName) || 'all';
+  const toolLabel = getToolLabel(resolvedToolName);
+  logInfo(`Scanning ${toolLabel} for skills`);
 
   const skills = await discoverSkills(toolName);
   if (skills.length === 0) {
@@ -172,7 +174,7 @@ async function bulkShareCommand(
   if (options.yes) {
     selected = skills;
   } else {
-    const result = await pickSkills(skills);
+    const result = await pickSkills(skills, `Select skills to share from ${toolLabel}`);
     if (result.cancelled || result.selected.length === 0) {
       logInfo('No skills selected.');
       return;

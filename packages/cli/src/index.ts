@@ -24,7 +24,7 @@ import { claimCommand } from './commands/claim.js';
 import { exportCommand } from './commands/export.js';
 import { importCommand } from './commands/import.js';
 import { inspectCommand } from './commands/inspect.js';
-import { blankLine, isInteractiveOutput, isJsonOutput, printJson, printPrimary, printSection } from './utils/output.js';
+import { isInteractiveOutput, isJsonOutput, printJson } from './utils/output.js';
 
 const program = new Command();
 function addInstallTargetOptions(command: Command): Command {
@@ -51,7 +51,7 @@ function addInstallTargetOptions(command: Command): Command {
 program
   .name('skilo')
   .description('Share agent skills with a link. No repo required.')
-  .version('1.0.17');
+  .version('1.0.18');
 program.option('--json', 'Emit machine-readable JSON');
 
 program.showSuggestionAfterError(true);
@@ -189,44 +189,6 @@ program
   .option('--unlisted', 'Keep locally published pack sources off search (default)')
   .action((sources, options) => packCommand(sources, options));
 
-function printInteractiveWelcome(): void {
-  printSection('Skilo');
-  printPrimary('Share agent skills with a link. No repo required.');
-  blankLine();
-
-  printSection('Start here');
-  printPrimary('  Share a local skill');
-  printPrimary('    skilo share ./my-skill');
-  printPrimary('  Add a skill or pack');
-  printPrimary('    skilo add https://skilo.xyz/s/abc123');
-  printPrimary('    skilo add https://skilo.xyz/p/abc123');
-  printPrimary('  Curate a pack');
-  printPrimary('    skilo pack ./reviewer namespace/design-system --name "Starter pack"');
-  printPrimary('  Sync between tools');
-  printPrimary('    skilo sync claude opencode');
-  blankLine();
-
-  printSection('Inputs');
-  printPrimary('  Skilo links, pack links, namespace/name refs, GitHub repos, bundles, local paths, local tool sources');
-  blankLine();
-
-  printSection('Install behavior');
-  printPrimary('  Explicit flags win: --cc, --codex, --cursor, --oc, and others');
-  printPrimary('  Without flags, Skilo detects installed tools and routes you there');
-  blankLine();
-
-  printSection('Agent entrypoints');
-  printPrimary('  skilo --json');
-  printPrimary('  https://skilo.xyz');
-  printPrimary('  https://skilo.xyz/llms.txt');
-  blankLine();
-
-  printSection('More');
-  printPrimary('  https://skilo.xyz');
-  printPrimary('  https://skilo.xyz/docs');
-  printPrimary('  skilo --help');
-}
-
 function printMachineWelcome(): void {
   printJson({
     name: 'skilo-cli',
@@ -279,12 +241,17 @@ const cliArgs = process.argv.slice(2);
 const hasOnlyJsonFlag = cliArgs.length > 0 && cliArgs.every((arg) => arg === '--json');
 
 if (process.argv.length <= 2 || hasOnlyJsonFlag) {
+  const run = async () => {
   if (isJsonOutput() || !isInteractiveOutput()) {
     printMachineWelcome();
   } else {
-    printInteractiveWelcome();
+    const { renderWelcomeScreen } = await import('./ui/ink/welcome.js');
+    await renderWelcomeScreen();
   }
   process.exit(0);
+  };
+
+  await run();
 }
 
 program.parse();

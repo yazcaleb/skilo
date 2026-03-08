@@ -111,7 +111,7 @@ export async function selectToolSourceSkills(
   }
 
   if (process.stdin.isTTY && isInteractiveOutput() && !isJsonOutput()) {
-    const picked = await pickSkills(availableSkills);
+    const picked = await pickSkills(availableSkills, `Select skills from ${sourceLabel}`);
     if (picked.cancelled || picked.selected.length === 0) {
       return {
         mode: 'cancelled',
