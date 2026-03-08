@@ -21,7 +21,7 @@ function ClaimPage() {
           <p className="text-lg font-medium text-black tracking-[-0.01em]">
             Claim a skill
           </p>
-          <p className="text-stone-500">
+          <p className="text-stone-600">
             When you publish a skill anonymously, you get a claim token. Use it to take ownership later &mdash; no account needed at publish time.
           </p>
         </div>
@@ -31,17 +31,17 @@ function ClaimPage() {
           <p className="font-medium">How it works</p>
           <ol className="flex list-decimal flex-col gap-3 pl-5">
             <li>
-              <p className="text-stone-500">
+              <p className="text-stone-600">
                 <span className="font-medium text-black">Publish a skill.</span> When you run <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">skilo publish</code> without being logged in, you get an anonymous namespace and a claim token.
               </p>
             </li>
             <li>
-              <p className="text-stone-500">
+              <p className="text-stone-600">
                 <span className="font-medium text-black">Save the token.</span> The CLI saves it to <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[13px]">~/.skilo/claims/</code> automatically. You'll also see it in the terminal output.
               </p>
             </li>
             <li>
-              <p className="text-stone-500">
+              <p className="text-stone-600">
                 <span className="font-medium text-black">Log in and claim.</span> When you're ready to own the skill under your name, log in and run the claim command.
               </p>
             </li>
@@ -68,13 +68,13 @@ function ClaimPage() {
         {/* Login */}
         <div className="mt-4 flex flex-col gap-2">
           <p className="font-medium">First time?</p>
-          <p className="text-stone-500">
+          <p className="text-stone-600">
             Log in first to create your namespace:
           </p>
           <code className="rounded bg-stone-100 px-3 py-2 font-mono text-[13px] w-fit">
             skilo login your-name
           </code>
-          <p className="text-stone-500">
+          <p className="text-stone-600">
             After logging in, you can also publish directly under your namespace without the anonymous claim flow.
           </p>
         </div>

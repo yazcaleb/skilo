@@ -223,7 +223,7 @@ function PackPage() {
                     )}
                   </div>
                   {skill.description && (
-                    <p className="mt-0.5 text-sm text-stone-500 line-clamp-1">
+                    <p className="mt-0.5 text-sm text-stone-600 line-clamp-1">
                       {skill.description}
                     </p>
                   )}

@@ -147,7 +147,7 @@ function SkillPage() {
           {skill.name}
         </p>
         {skill.description && (
-          <p className="text-stone-500">{skill.description}</p>
+          <p className="text-stone-600">{skill.description}</p>
         )}
         <div className="mt-1 flex items-center gap-2 text-xs text-stone-400">
           <span>v{skill.version}</span>
@@ -273,10 +273,10 @@ function SkillPage() {
             <dd className="font-mono text-[12px] text-stone-500 truncate">{skill.checksum}</dd>
 
             <dt className="text-stone-400">Trust</dt>
-            <dd className="text-stone-500">{isVerified ? "Verified signature" : "Unsigned or anonymous"}</dd>
+            <dd className="text-stone-600">{isVerified ? "Verified signature" : "Unsigned or anonymous"}</dd>
 
             <dt className="text-stone-400">Visibility</dt>
-            <dd className="text-stone-500">{isPublic ? "Public" : "Unlisted share"}</dd>
+            <dd className="text-stone-600">{isPublic ? "Public" : "Unlisted share"}</dd>
 
             {skill.homepage && (
               <>
