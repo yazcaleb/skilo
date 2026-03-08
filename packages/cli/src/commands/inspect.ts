@@ -23,8 +23,31 @@ export async function inspectCommand(source: string): Promise<void> {
 
     if (packToken) {
       const client = await getClient();
-      const pack = await client.resolvePack(packToken);
-      const verifiedCount = pack.skills.filter((skill) => skill.verified).length;
+      const pack: any = await client.resolvePack(packToken);
+
+      // Ref-packs contain raw refs, not resolved skills
+      if (pack.type === 'ref-pack') {
+        const items: Array<{ ref: string; token: string; url: string }> = pack.items || [];
+        const refs: string[] = items.length > 0 ? items.map((item) => item.ref) : pack.refs || [];
+
+        if (isJsonOutput()) {
+          printJson({ command: 'inspect', source, refPack: pack, installCommand: `skilo add https://skilo.xyz/p/${pack.token}` });
+          return;
+        }
+
+        printSection('Ref Pack', 'primary');
+        printKeyValue('refs', String(refs.length));
+        printPrimary('');
+        for (const item of items.length > 0 ? items : refs.map((r: string) => ({ ref: r, token: '', url: '' }))) {
+          printPrimary(item.ref);
+          if (item.url) printKeyValue('url', item.url);
+        }
+        printPrimary('');
+        printNote('install', `skilo add https://skilo.xyz/p/${pack.token}`, 'primary');
+        return;
+      }
+
+      const verifiedCount = pack.skills.filter((skill: any) => skill.verified).length;
 
       if (isJsonOutput()) {
         printJson({

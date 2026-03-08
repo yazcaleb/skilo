@@ -484,7 +484,24 @@ export async function importCommand(source: string, options: InstallOptions = {}
 
     if (packToken) {
       const client = await getClient();
-      const pack = await client.resolvePack(packToken);
+      const pack: any = await client.resolvePack(packToken);
+
+      // Ref-packs contain raw refs (GitHub URLs, short refs, etc.) — not resolved skills.
+      // Install each ref individually.
+      if (pack.type === 'ref-pack') {
+        const refs: string[] = pack.items
+          ? pack.items.map((item: any) => item.ref)
+          : pack.refs || [];
+        if (refs.length === 0) {
+          exitWithError('Ref pack is empty');
+        }
+        logInfo(`Installing ${refs.length} ref${refs.length === 1 ? '' : 's'} from pack...`);
+        for (const ref of refs) {
+          await importCommand(ref, options);
+        }
+        return;
+      }
+
       if (pack.trust?.auditStatus === 'blocked') {
         exitWithError(pack.trust.riskSummary[0] || 'Pack install blocked');
       }
