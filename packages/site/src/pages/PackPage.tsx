@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { SkiloMark, CopyIcon } from "../components/icons";
+import { CopyIcon } from "../components/icons";
 import { api } from "../api/skilo";
 import type { PackData } from "../api/skilo";
 
 const NAV_LINK = "text-sm underline decoration-stone-400/50 underline-offset-[2.5px] hover:decoration-stone-500 transition-[text-decoration-color] duration-150";
 const PRIMARY_BTN = "inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded text-[#0a1a1a] text-sm font-medium whitespace-nowrap bg-emerald-100 shadow-[0_2px_0_0_#6ee7b7] active:translate-y-px active:shadow-[0_1px_0_0_#34d399] transition-[transform,box-shadow] duration-75 cursor-pointer select-none";
+const MAIN = "flex flex-col gap-4 max-w-[600px] mx-auto p-5 pt-28 pb-20 lg:p-10 lg:pt-32 lg:pb-32 leading-relaxed text-base";
 
 function PackPage() {
   const { token } = useParams<{ token: string }>();
@@ -35,26 +36,26 @@ function PackPage() {
 
   if (loading) {
     return (
-      <Shell>
+      <main className={MAIN}>
         <p className="text-stone-400">Loading&hellip;</p>
-      </Shell>
+      </main>
     );
   }
 
   if (error || !pack) {
     return (
-      <Shell>
+      <main className={MAIN}>
         <p className="font-medium text-black">Pack not found</p>
         <p className="text-stone-500">{error || "This link may be invalid."}</p>
         <Link to="/" className={NAV_LINK}>
           Back to home
         </Link>
-      </Shell>
+      </main>
     );
   }
 
   return (
-    <Shell>
+    <main className={MAIN}>
       {/* Header info */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
@@ -100,26 +101,7 @@ function PackPage() {
           </Link>
         ))}
       </div>
-    </Shell>
-  );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3 lg:px-10 lg:py-4">
-          <Link to="/" className="flex items-center gap-2 font-medium">
-            <SkiloMark className="h-5 w-5" />
-            Skilo
-          </Link>
-        </nav>
-      </header>
-
-      <main className="flex flex-col gap-4 max-w-[600px] mx-auto p-5 pt-28 pb-20 lg:p-10 lg:pt-32 lg:pb-32 leading-relaxed text-base">
-        {children}
-      </main>
-    </>
+    </main>
   );
 }
 

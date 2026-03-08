@@ -1,13 +1,13 @@
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
 import { marked } from "marked";
-import { SkiloMark, CopyIcon } from "../components/icons";
+import { CopyIcon } from "../components/icons";
 import { api } from "../api/skilo";
 import type { SkillMetadata } from "../api/skilo";
 
 const NAV_LINK = "text-sm underline decoration-stone-400/50 underline-offset-[2.5px] hover:decoration-stone-500 transition-[text-decoration-color] duration-150";
 const PRIMARY_BTN = "inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded text-[#0a1a1a] text-sm font-medium whitespace-nowrap bg-emerald-100 shadow-[0_2px_0_0_#6ee7b7] active:translate-y-px active:shadow-[0_1px_0_0_#34d399] transition-[transform,box-shadow] duration-75 cursor-pointer select-none";
+const MAIN = "flex flex-col gap-4 max-w-[600px] mx-auto p-5 pt-28 pb-20 lg:p-10 lg:pt-32 lg:pb-32 leading-relaxed text-base";
 
 function SkillPage() {
   const { token } = useParams<{ token: string }>();
@@ -91,15 +91,15 @@ function SkillPage() {
 
   if (loading) {
     return (
-      <Shell>
+      <main className={MAIN}>
         <p className="text-stone-400">Loading&hellip;</p>
-      </Shell>
+      </main>
     );
   }
 
   if (requiresPassword && !skill) {
     return (
-      <Shell>
+      <main className={MAIN}>
         <div className="flex flex-col gap-3">
           <p className="font-medium text-black">This skill is password protected.</p>
           <form onSubmit={handleVerifyPassword} className="flex flex-col gap-3">
@@ -120,13 +120,13 @@ function SkillPage() {
             </button>
           </form>
         </div>
-      </Shell>
+      </main>
     );
   }
 
   if (error || !skill) {
     return (
-      <Shell>
+      <main className={MAIN}>
         <p className="font-medium text-black">Skill not found</p>
         <p className="text-stone-500">
           {error || "This link may be invalid or expired."}
@@ -134,12 +134,12 @@ function SkillPage() {
         <Link to="/" className={NAV_LINK}>
           Back to home
         </Link>
-      </Shell>
+      </main>
     );
   }
 
   return (
-    <Shell>
+    <main className={MAIN}>
       {/* Name + version */}
       <div className="flex flex-col gap-1">
         <p className="text-lg font-medium text-black tracking-[-0.01em]">
@@ -247,26 +247,7 @@ function SkillPage() {
           </div>
         )}
       </div>
-    </Shell>
-  );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3 lg:px-10 lg:py-4">
-          <Link to="/" className="flex items-center gap-2 font-medium">
-            <SkiloMark className="h-5 w-5" />
-            Skilo
-          </Link>
-        </nav>
-      </header>
-
-      <main className="flex flex-col gap-4 max-w-[600px] mx-auto p-5 pt-28 pb-20 lg:p-10 lg:pt-32 lg:pb-32 leading-relaxed text-base">
-        {children}
-      </main>
-    </>
+    </main>
   );
 }
 

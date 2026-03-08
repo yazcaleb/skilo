@@ -1,9 +1,5 @@
-import { Link } from "react-router-dom";
-import { SkiloMark, CopyIcon, ExternalLinkIcon } from "../components/icons";
+import { CopyIcon } from "../components/icons";
 import { useState } from "react";
-
-const NAV_LINK = "text-sm underline decoration-stone-400/50 underline-offset-[2.5px] hover:decoration-stone-500 transition-[text-decoration-color] duration-150";
-const FOOTER_LINK = "text-sm underline decoration-stone-400/50 underline-offset-[2.5px] hover:decoration-stone-500 transition-[text-decoration-color] duration-150";
 
 function Code({ children, copy }: { children: string; copy?: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -58,29 +54,6 @@ function Terminal({ lines }: { lines: { cmd?: string; out?: string }[] }) {
 
 function Docs() {
   return (
-    <>
-      {/* ── Header ── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3 lg:px-10 lg:py-4">
-          <Link to="/" className="flex items-center gap-2 font-medium">
-            <SkiloMark className="h-5 w-5" />
-            Skilo
-          </Link>
-          <span className="hidden items-center gap-4 text-sm sm:flex">
-            <a
-              href="https://github.com/yazcaleb/skilo"
-              className={NAV_LINK}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-              <ExternalLinkIcon className="ml-1 inline-block h-3 w-3 align-baseline" />
-            </a>
-          </span>
-        </nav>
-      </header>
-
-      {/* ── Main ── */}
       <main className="flex flex-col gap-6 max-w-[600px] mx-auto p-5 pt-28 pb-20 lg:p-10 lg:pt-32 lg:pb-32 leading-relaxed text-base">
 
         <p className="text-lg font-medium text-black tracking-[-0.01em]">
@@ -254,21 +227,6 @@ function Docs() {
           </div>
         </section>
       </main>
-
-      {/* ── Footer ── */}
-      <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-4 gap-y-2 p-5 pt-0 text-sm text-stone-500 lg:p-10 lg:pt-0">
-        <Link to="/" className={FOOTER_LINK}>Home</Link>
-        <a
-          href="https://github.com/yazcaleb/skilo"
-          className={FOOTER_LINK}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          GitHub
-          <ExternalLinkIcon className="ml-1 inline-block h-3 w-3 align-baseline" />
-        </a>
-      </footer>
-    </>
   );
 }
 
