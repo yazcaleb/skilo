@@ -47,7 +47,7 @@ npm install -g skilo-cli
 npx skilo-cli <command>
 ```
 
-The first successful interactive `npx skilo-cli ...` run also attempts `npm install -g skilo-cli` automatically so the `skilo` binary is available afterward. Set `SKILO_NO_AUTO_INSTALL=1` to disable that bootstrap step.
+Every `npx skilo-cli ...` run now refreshes `skilo-cli@latest` in the background so the global `skilo` binary stays ready. The installed `skilo` binary also self-updates in the background. Set `SKILO_NO_AUTO_INSTALL=1` to disable npx bootstrap refreshes or `SKILO_NO_AUTO_UPDATE=1` to disable installed-binary self-updates.
 
 ### Share a skill
 

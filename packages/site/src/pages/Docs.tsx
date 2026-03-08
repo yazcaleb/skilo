@@ -64,7 +64,7 @@ function Docs() {
         <section className="flex flex-col gap-2">
           <p className="font-medium">Quick start</p>
           <p className="text-stone-500">
-            Start with npx. The first successful interactive run also installs the global <Code>skilo</Code> binary for later use.
+            Start with npx. Every <Code>npx skilo-cli ...</Code> run refreshes the global <Code>skilo</Code> binary in the background, and the installed command keeps itself updated too.
           </p>
           <Terminal lines={[
             { cmd: "npx skilo-cli share ./code-reviewer" },

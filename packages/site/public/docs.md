@@ -2,7 +2,7 @@
 
 ## Quick start
 
-Start with npx. The first successful interactive run also installs the global `skilo` binary for later use.
+Start with npx. Every `npx skilo-cli ...` run refreshes the global `skilo` binary in the background, and the installed `skilo` command keeps itself updated too.
 
 ```
 $ npx skilo-cli share ./code-reviewer

@@ -49,7 +49,7 @@ function Landing() {
           </div>
 
           <p className="text-xs text-stone-400 mt-1">
-            First successful interactive runs bootstrap the global <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">skilo</code> binary. No account required.{" "}
+            Every <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">npx skilo-cli</code> run refreshes the global <code className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[11px]">skilo</code> binary in the background. No account required.{" "}
             <Link to="/docs" className="underline decoration-stone-300 underline-offset-[2px] hover:decoration-stone-400 transition-[text-decoration-color]">
               Read the docs&nbsp;&rarr;
             </Link>

@@ -1,15 +1,24 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 
-const binDir = dirname(fileURLToPath(import.meta.url));
-const cliPath = resolve(binDir, '..', 'dist', 'index.js');
-const autoInstallMarker = process.env.SKILO_AUTO_INSTALL_MARKER || join(homedir(), '.skilo', 'auto-install-v1');
+const binPath = fileURLToPath(import.meta.url);
+const binDir = dirname(binPath);
+const packageRoot = resolve(binDir, '..');
+const cliPath = resolve(packageRoot, 'dist', 'index.js');
+const stateDir = process.env.SKILO_STATE_DIR || join(homedir(), '.skilo');
+const refreshLockPath = process.env.SKILO_AUTO_UPDATE_LOCK || join(stateDir, 'cli-refresh.lock.json');
+const refreshStatePath = process.env.SKILO_AUTO_UPDATE_STATE || join(stateDir, 'cli-refresh.json');
+const refreshStaleMs = Number.parseInt(process.env.SKILO_AUTO_UPDATE_STALE_MS || '', 10) || 15 * 60 * 1000;
+const packageName = 'skilo-cli';
+
+if (process.env.SKILO_INTERNAL_REFRESH === '1') {
+  runRefreshWorker();
+}
 
 function isInteractiveSession() {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY);
@@ -20,45 +29,176 @@ function isJsonMode() {
 }
 
 function isNpxExecution() {
-  const currentPath = fileURLToPath(import.meta.url);
   return (
-    currentPath.includes(`${sep}_npx${sep}`) ||
+    binPath.includes(`${sep}_npx${sep}`) ||
     process.env.npm_command === 'exec' ||
     process.env.npm_lifecycle_event === 'npx'
   );
 }
 
-function shouldAutoInstall() {
+function isLocalDevelopmentExecution() {
+  return existsSync(resolve(packageRoot, 'src', 'index.ts'));
+}
+
+function readCurrentVersion() {
+  try {
+    const packageJson = readFileSync(resolve(packageRoot, 'package.json'), 'utf8');
+    const parsed = JSON.parse(packageJson);
+    return parsed.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function shouldScheduleBootstrapRefresh() {
   return (
     isNpxExecution() &&
-    isInteractiveSession() &&
-    !isJsonMode() &&
+    !isLocalDevelopmentExecution() &&
     process.env.CI !== 'true' &&
-    process.env.SKILO_NO_AUTO_INSTALL !== '1' &&
-    !existsSync(autoInstallMarker)
+    process.env.SKILO_NO_AUTO_INSTALL !== '1'
   );
 }
 
-function markAutoInstallAttempt() {
-  mkdirSync(dirname(autoInstallMarker), { recursive: true });
-  writeFileSync(autoInstallMarker, `${new Date().toISOString()}\n`, 'utf8');
+function shouldScheduleSelfUpdate() {
+  return (
+    !isNpxExecution() &&
+    !isLocalDevelopmentExecution() &&
+    process.env.CI !== 'true' &&
+    process.env.SKILO_NO_AUTO_UPDATE !== '1'
+  );
 }
 
-function installGlobally() {
-  process.stdout.write('\nSkilo is installing itself globally so you can use `skilo` directly next time.\n');
-
-  const npmExecPath = process.env.npm_execpath;
-  const command = npmExecPath ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const args = npmExecPath ? [npmExecPath, 'install', '-g', 'skilo-cli'] : ['install', '-g', 'skilo-cli'];
-  const result = spawnSync(command, args, { stdio: 'inherit' });
-
-  if (result.status === 0) {
-    markAutoInstallAttempt();
-    process.stdout.write('Global install complete. You can now run `skilo` directly.\n');
-    return;
+function readRefreshLock() {
+  if (!existsSync(refreshLockPath)) {
+    return null;
   }
 
-  process.stderr.write('Global install was skipped. You can run `npm install -g skilo-cli` later.\n');
+  try {
+    return JSON.parse(readFileSync(refreshLockPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid) {
+  if (!pid || pid <= 0) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearRefreshLock() {
+  rmSync(refreshLockPath, { force: true });
+}
+
+function hasActiveRefresh() {
+  const lock = readRefreshLock();
+  if (!lock) {
+    clearRefreshLock();
+    return false;
+  }
+
+  const startedAt = lock.startedAt ? Date.parse(lock.startedAt) : 0;
+  const ageMs = startedAt > 0 ? Date.now() - startedAt : Number.POSITIVE_INFINITY;
+  if (ageMs < refreshStaleMs && isProcessAlive(lock.pid || 0)) {
+    return true;
+  }
+
+  clearRefreshLock();
+  return false;
+}
+
+function shouldAnnounceBootstrapRefresh() {
+  return isNpxExecution() && isInteractiveSession() && !isJsonMode() && !existsSync(refreshStatePath);
+}
+
+function getInstallCommand() {
+  const npmExecPath = process.env.npm_execpath;
+  const packageSpec = `${packageName}@latest`;
+  return npmExecPath
+    ? { command: process.execPath, args: [npmExecPath, 'install', '-g', packageSpec] }
+    : { command: process.platform === 'win32' ? 'npm.cmd' : 'npm', args: ['install', '-g', packageSpec] };
+}
+
+function scheduleRefresh(source) {
+  if (hasActiveRefresh()) {
+    return false;
+  }
+
+  mkdirSync(stateDir, { recursive: true });
+
+  const child = spawn(process.execPath, [binPath], {
+    detached: true,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      SKILO_INTERNAL_REFRESH: '1',
+      SKILO_REFRESH_SOURCE: source,
+      SKILO_CURRENT_VERSION: readCurrentVersion(),
+      SKILO_NO_AUTO_INSTALL: '1',
+      SKILO_NO_AUTO_UPDATE: '1',
+    },
+  });
+
+  if (!child.pid) {
+    return false;
+  }
+
+  writeFileSync(refreshLockPath, JSON.stringify({
+    pid: child.pid,
+    source,
+    currentVersion: readCurrentVersion(),
+    startedAt: new Date().toISOString(),
+  }, null, 2));
+  child.unref();
+  return true;
+}
+
+function writeRefreshState(state) {
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(refreshStatePath, JSON.stringify(state, null, 2), 'utf8');
+}
+
+function runRefreshWorker() {
+  const startedAt = new Date().toISOString();
+  const source = process.env.SKILO_REFRESH_SOURCE || 'unknown';
+  const currentVersion = process.env.SKILO_CURRENT_VERSION || readCurrentVersion();
+  const { command, args } = getInstallCommand();
+
+  try {
+    writeRefreshState({
+      package: packageName,
+      requestedVersion: 'latest',
+      currentVersion,
+      source,
+      status: 'running',
+      startedAt,
+    });
+
+    const result = spawnSync(command, args, { stdio: 'ignore' });
+
+    writeRefreshState({
+      package: packageName,
+      requestedVersion: 'latest',
+      currentVersion,
+      source,
+      status: result.status === 0 ? 'updated' : 'failed',
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      exitCode: result.status ?? null,
+      signal: result.signal ?? null,
+    });
+  } finally {
+    clearRefreshLock();
+  }
+
+  process.exit(0);
 }
 
 const child = spawn(process.execPath, [cliPath, ...process.argv.slice(2)], {
@@ -66,8 +206,14 @@ const child = spawn(process.execPath, [cliPath, ...process.argv.slice(2)], {
 });
 
 child.on('exit', (code) => {
-  if ((code ?? 0) === 0 && shouldAutoInstall()) {
-    installGlobally();
+  const bootstrapScheduled = shouldScheduleBootstrapRefresh() && scheduleRefresh('npx');
+  const selfUpdateScheduled = shouldScheduleSelfUpdate() && scheduleRefresh('global');
+
+  if (bootstrapScheduled && shouldAnnounceBootstrapRefresh()) {
+    process.stdout.write('\nSkilo is refreshing the global `skilo` binary in the background.\n');
+  } else if (selfUpdateScheduled && isInteractiveSession() && !isJsonMode() && basename(process.argv[1] || '') === 'skilo') {
+    process.stdout.write('\nSkilo is checking for CLI updates in the background.\n');
   }
+
   process.exit(code ?? 0);
 });

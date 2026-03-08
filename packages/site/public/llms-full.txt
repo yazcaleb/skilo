@@ -17,7 +17,7 @@ $ skilo pack ./code-reviewer flrabbit/original-landing-page-builder --name "Star
 
 No account required. Skills are published anonymously by default. You can claim them later with `skilo claim`, or create a namespace up front with `skilo login yaz`.
 
-For humans, the first successful interactive `npx skilo-cli ...` run also installs the global `skilo` binary.
+For humans, every `npx skilo-cli ...` run refreshes the global `skilo` binary in the background, and the installed `skilo` command keeps itself updated too.
 For agents, prefer `npx skilo-cli --json` and parse the structured output.
 
 ## CLI commands
