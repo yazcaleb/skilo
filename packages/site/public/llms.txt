@@ -1,63 +1,28 @@
 # Skilo
 
-Skilo is a tiny sharing layer for agent skills. It turns a local skill folder with `SKILL.md` into a shareable link, installs skills from links or refs, and supports native skill directories for Claude Code, Codex, Cursor, Amp, Windsurf, OpenCode, Cline, Roo, and OpenClaw.
+> Share agent skills with a link. Publish and install SKILL.md files across Claude Code, Cursor, Codex, and every AI coding tool.
 
-## Canonical URLs
+Skilo is a CLI and registry for sharing agent skills. Skills are directories containing a SKILL.md file with YAML frontmatter and markdown instructions. The CLI publishes skills to the registry and generates shareable links. Recipients install with one command. No account required.
 
-- Product: https://skilo.xyz
-- Docs: https://skilo.xyz/docs
-- GitHub: https://github.com/yazcaleb/skilo
-- npm CLI: https://www.npmjs.com/package/skilo-cli
-- API base: https://skilo-api.yaz-b35.workers.dev
+- Install: `npm i -g skilo-cli`
+- Share a skill: `skilo share ./my-skill` → returns a link
+- Install a skill: `skilo add skilo.xyz/s/<token>` → downloads, verifies, installs
+- Bulk share: `skilo share claude` → shares all skills from a tool at once
 
-## Core CLI
+## Docs
 
-- Install CLI: `npm install -g skilo-cli`
-- One-off usage: `npx skilo-cli <command>`
-- Share a local skill: `npx skilo-cli share ./my-skill`
-- Install from a share link: `npx skilo-cli add https://skilo.xyz/s/<token>`
-- Install from a registry ref: `npx skilo-cli add namespace/skill-name`
-- Inspect before install: `npx skilo-cli inspect https://skilo.xyz/s/<token>`
-- Publish current skill: `npx skilo-cli publish`
+- [Documentation](https://skilo.xyz/docs.md): CLI commands, SKILL.md format, supported tools, trust model
+- [Claim a skill](https://skilo.xyz/claim.md): How to claim anonymously published skills
+- [Full context](https://skilo.xyz/llms-full.txt): All documentation in a single file
 
-## Install Targets
+## Links
 
-- Claude Code: `--cc` or `--claude-code` -> `~/.claude/skills/`
-- Codex: `--codex` -> `~/.agents/skills/`, `~/.codex/skills/`
-- Cursor: `--cursor` -> `~/.cursor/skills/`
-- Amp: `--amp` -> `~/.config/agents/skills/`
-- Windsurf: `--windsurf` -> `~/.codeium/windsurf/skills/`
-- OpenCode: `--oc` or `--opencode` -> `~/.config/opencode/skills/`
-- Cline: `--cline` -> `~/.cline/skills/`
-- Roo: `--roo` -> `~/.roo/skills/`
-- OpenClaw: `--openclaw` -> `~/.openclaw/skills/`
+- [GitHub](https://github.com/yazcaleb/skilo): Source code and issues
+- [npm](https://www.npmjs.com/package/skilo-cli): CLI package
 
-## Supported Sources
+## Optional
 
-- Local skill path
-- Local `SKILL.md` or `skill.md`
-- Skilo share link `https://skilo.xyz/s/<token>`
-- Registry ref `namespace/name` or `namespace/name@version`
-- GitHub shorthand `github:user/repo` or `github:user/repo#path`
-- `.skl` bundle
-- Direct URL
-
-## Share and Trust Model
-
-- Skills can be shared anonymously and claimed later.
-- Installs verify SHA-256 checksums when verification metadata is available.
-- Verified publishers can sign bundles.
-- Share links can be one-time, time-limited, password-protected, or capped by total uses.
-
-## API Notes
-
-- Health: `GET /health`
-- Share resolution: `GET /v1/skills/share/:token`
-- Skill metadata: `GET /v1/skills/:namespace/:name`
-- Skill tarball: `GET /v1/skills/:namespace/:name/tarball/:version`
-
-## Recommended References
-
-- Read https://skilo.xyz/docs for user-facing docs.
-- Read https://github.com/yazcaleb/skilo for source and implementation details.
-- When helping an agent use Skilo, prefer the official Skilo skill if it is installed.
+- [API health](https://skilo-api.yaz-b35.workers.dev/health): REST API status
+- Resolve a share link: `GET https://skilo-api.yaz-b35.workers.dev/v1/skills/share/:token` → skill metadata + tarball URL
+- Resolve a pack: `GET https://skilo-api.yaz-b35.workers.dev/v1/packs/:token` → pack with skill list
+- Skill content is the SKILL.md file inside the tarball. The site renders it at `/s/:token`.
