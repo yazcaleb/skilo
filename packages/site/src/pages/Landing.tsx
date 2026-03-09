@@ -344,29 +344,16 @@ function Landing() {
       )}
 
       <div className="mt-12">
-        <div className="overflow-hidden rounded-xl border border-stone-800/80 shadow-lg shadow-stone-900/5">
-          <div className="flex items-center gap-1.5 border-b border-stone-800/60 bg-stone-900 px-4 py-2.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-stone-700" />
-            <div className="h-2.5 w-2.5 rounded-full bg-stone-700" />
-            <div className="h-2.5 w-2.5 rounded-full bg-stone-700" />
-          </div>
-          <div className="bg-stone-950 px-5 py-5 font-mono text-[13px] leading-6">
-            <div>
-              <span className="text-stone-600">$ </span>
-              <span className="text-stone-200">npx skilo-cli share claude</span>
-            </div>
-            <div className="pl-4 text-emerald-400/70">&rarr; skilo.xyz/p/kX7mN2pQ</div>
-            <div className="h-4" />
-            <div>
-              <span className="text-stone-600">$ </span>
-              <span className="text-stone-200">skilo add skilo.xyz/p/kX7mN2pQ</span>
-            </div>
-            <div className="pl-4 text-stone-500">
-              &#10003; Installed 3 skills into Codex
-              <span className="cursor-blink ml-0.5 inline-block h-[14px] w-[2px] bg-stone-500 align-text-bottom" />
-            </div>
-          </div>
-        </div>
+        <video
+          className="w-full rounded-xl"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src="/demo.webm?v=2" type="video/webm" />
+          <source src="/demo.mp4?v=2" type="video/mp4" />
+        </video>
       </div>
 
       <div className="mt-14">
