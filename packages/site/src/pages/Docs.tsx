@@ -75,7 +75,7 @@ function Docs() {
             { out: "\u2192 skilo.xyz/p/abc123" },
           ]} />
           <p className="text-stone-600">
-            No account required. Skills are published anonymously by default. You can claim them later with <Code>skilo claim</Code>.
+            No account required. Skilo is free and will stay free as long as we fit inside Cloudflare's free tier. Skills and share links never expire unless you set an expiration. You can claim them later with <Code>skilo claim</Code>.
           </p>
           <p className="text-stone-600">
             Want a real namespace? Run <Code copy>skilo login yaz</Code> once. Use <Code copy>skilo login --token sk_...</Code> to restore an existing account.
@@ -197,10 +197,68 @@ function Docs() {
 
             <div>
               <p className="text-sm">
+                <Code>skilo pack [sources...]</Code>
+              </p>
+              <p className="text-stone-600 text-sm mt-1">
+                Create a shareable pack from multiple skills, links, refs, or repo sources. Returns a single pack URL.
+              </p>
+              <ul className="text-stone-600 text-sm list-disc pl-5 mt-1 flex flex-col gap-0.5">
+                <li><Code>--name &lt;name&gt;</Code> &mdash; name the pack</li>
+                <li>Supports the same <Code>--one-time</Code>, <Code>--expires</Code>, <Code>--uses</Code>, <Code>--password</Code> options as share</li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-sm">
                 <Code>skilo export</Code> / <Code>skilo import &lt;source&gt;</Code>
               </p>
               <p className="text-stone-600 text-sm mt-1">
                 Export to a .skl file for offline sharing, or import from a .skl file, GitHub repo, or local path.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm">
+                <Code>skilo init [name]</Code>
+              </p>
+              <p className="text-stone-600 text-sm mt-1">
+                Scaffold a new skill directory with a SKILL.md template.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm">
+                <Code>skilo validate</Code>
+              </p>
+              <p className="text-stone-600 text-sm mt-1">
+                Check the current directory's SKILL.md for errors before publishing.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm">
+                <Code>skilo audit [source]</Code>
+              </p>
+              <p className="text-stone-600 text-sm mt-1">
+                Run a trust audit on installed skills or local bundles. Checks for hardcoded secrets, prompt exfiltration, and other risks.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm">
+                <Code>skilo deprecate &lt;skill&gt; [message]</Code>
+              </p>
+              <p className="text-stone-600 text-sm mt-1">
+                Mark a skill as deprecated. Requires authentication.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm">
+                <Code>skilo yank &lt;skill@version&gt; [reason]</Code>
+              </p>
+              <p className="text-stone-600 text-sm mt-1">
+                Remove a specific version from the registry. Requires authentication.
               </p>
             </div>
           </div>
@@ -293,6 +351,29 @@ function Docs() {
             </table>
           </div>
         </section>
+        {/* ── Privacy ── */}
+        <section className="flex flex-col gap-2 mt-4">
+          <p className="font-medium">Privacy</p>
+          <p className="text-stone-600">
+            Skills are published anonymously by default and stored as unlisted until you explicitly make them public. Skilo does not log IP addresses, user agents, or referrer data. All data is stored on Cloudflare D1 and R2.
+          </p>
+        </section>
+
+        {/* ── Rate limits ── */}
+        <section className="flex flex-col gap-2 mt-4">
+          <p className="font-medium">Rate limits</p>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-stone-600">
+            <li>Publishing &mdash; 50 req/hr per IP</li>
+            <li>Sharing &mdash; 100 links/hr per IP</li>
+            <li>Installing / resolving &mdash; 1,000 req/hr per IP</li>
+            <li>Packing &mdash; 20 packs/hr per IP</li>
+            <li>Password-protected links &mdash; 5 attempts/hr per link</li>
+          </ul>
+          <p className="text-stone-600">
+            Exceeded limits return <Code>429</Code> with a <Code>retryAfter</Code> value in seconds.
+          </p>
+        </section>
+
       </main>
   );
 }

@@ -331,22 +331,20 @@ function Landing() {
       )}
 
       <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <code className="rounded bg-stone-100 px-3 py-1.5 font-mono text-[13px] text-stone-600">
-          npx skilo-cli
-        </code>
         <button type="button" onClick={handleInstallCopy} className={PRIMARY_BTN}>
           <CopyIcon className="h-4 w-4" />
-          {installCopied ? "Copied" : "Copy"}
+          {installCopied ? "Copied" : <span className="font-mono">npx skilo-cli</span>}
         </button>
-        <span className="text-stone-400">or</span>
+        <span className="text-stone-400">or just</span>
         <button type="button" onClick={handlePromptCopy} className={PRIMARY_BTN}>
+          <CopyIcon className="h-4 w-4" />
           {promptCopied ? "Copied" : "Tell your agent"}
         </button>
       </div>
 
       {stats && (
         <p className="mt-4 text-xs tabular-nums text-stone-500">
-          {stats.skills.toLocaleString()} skills published
+          {stats.skills.toLocaleString()} skills shared
           <span className="mx-1.5 text-stone-400">/</span>
           {stats.installs.toLocaleString()} installs
         </p>

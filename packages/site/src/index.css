@@ -112,14 +112,15 @@ body {
 /* Rendered changelog */
 .changelog-md h1 {
   font-size: 1.125em;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: #0a0a0a;
   margin-bottom: 0.25em;
 }
 .changelog-md blockquote {
   border-left: 2px solid #e7e5e4;
   padding-left: 0.75em;
-  color: #a8a29e;
+  color: #78716c;
   margin-bottom: 1.5em;
   font-size: 0.8125em;
 }
@@ -134,7 +135,9 @@ body {
 .changelog-md h3 {
   font-size: 0.75em;
   font-weight: 500;
-  color: #a8a29e;
+  color: #78716c;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   margin-top: 0.75em;
   margin-bottom: 0.25em;
 }

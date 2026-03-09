@@ -13,7 +13,7 @@ $ skilo pack ./code-reviewer flrabbit/original-landing-page-builder --name "Star
 → skilo.xyz/p/abc123
 ```
 
-No account required. Skills are published anonymously by default. You can claim them later with `skilo claim`.
+No account required. Skilo is free and will stay free as long as we fit inside Cloudflare's free tier. Skills and share links never expire unless you set an expiration. You can claim them later with `skilo claim`.
 
 Want a real namespace? Run `skilo login yaz` once. That creates a publishing identity and stores an API key locally. Use `skilo login --token sk_...` to restore an existing account.
 
@@ -99,9 +99,36 @@ Search public skills by name or description. Use this when you want discovery, n
 
 View a skill's SKILL.md, checksum, and metadata without installing.
 
+### `skilo pack [sources...]`
+
+Create a shareable pack from multiple skills, links, refs, or repo sources. Returns a single pack URL.
+
+- `--name <name>` — name the pack
+- Supports the same `--one-time`, `--expires`, `--uses`, `--password` options as share
+
 ### `skilo export` / `skilo import <source>`
 
 Export to a .skl file for offline sharing, or import from a .skl file, GitHub repo, or local path.
+
+### `skilo init [name]`
+
+Scaffold a new skill directory with a SKILL.md template.
+
+### `skilo validate`
+
+Check the current directory's SKILL.md for errors before publishing.
+
+### `skilo audit [source]`
+
+Run a trust audit on installed skills or local bundles. Checks for hardcoded secrets, prompt exfiltration, and other risks.
+
+### `skilo deprecate <skill> [message]`
+
+Mark a skill as deprecated. Requires authentication.
+
+### `skilo yank <skill@version> [reason]`
+
+Remove a specific version from the registry. Requires authentication.
 
 ## SKILL.md format
 
@@ -161,3 +188,17 @@ Skilo discovers skills from these directories:
 | Cline | `~/.cline/skills/` |
 | Roo | `~/.roo/skills/` |
 | OpenClaw | `~/.openclaw/skills/` |
+
+## Privacy
+
+Skills are published anonymously by default and stored as unlisted until you explicitly make them public. Skilo does not log IP addresses, user agents, or referrer data. All data is stored on Cloudflare D1 and R2.
+
+## Rate limits
+
+- Publishing — 50 req/hr per IP
+- Sharing — 100 links/hr per IP
+- Installing / resolving — 1,000 req/hr per IP
+- Packing — 20 packs/hr per IP
+- Password-protected links — 5 attempts/hr per link
+
+Exceeded limits return `429` with a `retryAfter` value in seconds.

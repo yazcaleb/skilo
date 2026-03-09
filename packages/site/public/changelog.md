@@ -6,6 +6,7 @@
 
 ### Changed
 
+- Polish site: contrast, nav harmony, skills.sh compat (`10b65b6`)
 - Replace static terminal demo with video recording (`a7443f9`)
 - Tighten API auth typing and site headers (`30c910c`)
 - Polish bulk skill sharing flow (`a9b7b0b`)

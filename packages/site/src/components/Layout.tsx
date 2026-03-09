@@ -81,10 +81,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Github size={16} />
             </a>
           </div>
-          <span className="flex items-center gap-1.5 text-xs text-stone-400">
-            <Cloudflare size={14} />
-            Runs on Cloudflare
-          </span>
+          <p className="flex items-center gap-1.5 text-xs text-stone-400">
+            <Cloudflare size={12} /> Runs on Cloudflare <span className="mx-0.5 text-stone-300">/</span> by <a href="https://x.com/yazcal" target="_blank" rel="noopener noreferrer" className="text-stone-500 transition-colors hover:text-black">Yaz</a>
+          </p>
         </div>
       </footer>
     </>
